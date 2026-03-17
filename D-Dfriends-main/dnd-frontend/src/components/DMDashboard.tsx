@@ -2,15 +2,15 @@ import React, { useState, useEffect } from 'react';
 import { Character, InventoryItem, Profile } from '../types';
 import { Shield, Users, Heart, PackagePlus, Loader2, LogOut, CheckCircle, Trash2, Mic } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { Socket } from 'socket.io-client';
+import { RealtimeChannel } from '@supabase/supabase-js';
 import { getClassIcon } from '../lib/classIcons';
 
 interface Props {
   onLogout: () => void;
-  socket?: Socket | null;
+  channel?: RealtimeChannel | null;
 }
 
-export default function DMDashboard({ onLogout, socket }: Props) {
+export default function DMDashboard({ onLogout, channel }: Props) {
   const [characters, setCharacters] = useState<Character[]>([]);
   const [pendingProfiles, setPendingProfiles] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
@@ -138,8 +138,14 @@ export default function DMDashboard({ onLogout, socket }: Props) {
 
   const handleTTS = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!ttsMessage.trim() || !socket) return;
-    socket.emit('play_tts', { salaId: 'default', text: ttsMessage });
+    if (!ttsMessage.trim() || !channel) return;
+
+    channel.send({
+      type: 'broadcast',
+      event: 'tts_event',
+      payload: { text: ttsMessage }
+    });
+    
     setTtsMessage('');
   };
 
@@ -267,7 +273,7 @@ export default function DMDashboard({ onLogout, socket }: Props) {
                 />
                 <button 
                   type="submit" 
-                  disabled={!ttsMessage.trim() || !socket}
+                  disabled={!ttsMessage.trim() || !channel}
                   className="w-full py-2 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white rounded transition-colors text-xs font-bold"
                 >
                   Anunciar na Taverna

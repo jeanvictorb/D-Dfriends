@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { io, Socket } from 'socket.io-client';
 import { Heart, User, LogOut, Package } from 'lucide-react';
 import { Character, DiceEvent, Profile } from './types';
 import CharacterCreator from './components/CharacterCreator';
@@ -8,9 +7,9 @@ import Auth from './components/Auth';
 import DMDashboard from './components/DMDashboard';
 import Dice3D from './components/Dice3D';
 import { supabase } from './lib/supabase';
-import { User as SupabaseUser, Session } from '@supabase/supabase-js';
+import { User as SupabaseUser, Session, RealtimeChannel } from '@supabase/supabase-js';
 
-const SOCKET_URL = 'http://localhost:3001';
+const EDGE_FUNCTION_URL = 'https://kgxvjeqjcyphlkuszmoi.supabase.co/functions/v1/tts';
 
 const App: React.FC = () => {
   const [session, setSession] = useState<Session | null>(null);
@@ -22,7 +21,7 @@ const App: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [showCreator, setShowCreator] = useState(false);
   const [diceLogs, setDiceLogs] = useState<DiceEvent[]>([]);
-  const [socket, setSocket] = useState<Socket | null>(null);
+  const [channel, setChannel] = useState<RealtimeChannel | null>(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -51,102 +50,80 @@ const App: React.FC = () => {
       }
     });
 
-    const newSocket = io(SOCKET_URL);
-    setSocket(newSocket);
-    newSocket.emit('join_mesa', 'default');
-    newSocket.on('dice_event', (event: DiceEvent) => {
-      setDiceLogs(prev => [event, ...prev.slice(0, 49)]);
+    // Initialize Supabase Realtime Channel
+    const mesaChannel = supabase.channel('mesa_default', {
+      config: { broadcast: { self: true } }
     });
-    newSocket.on('hp_sync', ({ charId, hp_current }: { charId: number, hp_current: number }) => {
-      setCharacter(prev => {
-        if (prev && prev.id === charId) {
-          return { ...prev, hp_current };
-        }
-        return prev;
-      });
-    });
-    newSocket.on('tts_event', ({ audioChunks, text }: { audioChunks?: string[], text?: string }) => {
-      console.log('[TTS] Event received:', { chunksCount: audioChunks?.length, hasText: !!text });
 
-      const playText = async (textToPlay: string) => {
-        // Split into chunks of max 200 chars on word boundaries
-        const chunks: string[] = [];
-        let remaining = textToPlay;
-        while (remaining.length > 0) {
-          let cutAt = Math.min(200, remaining.length);
-          if (cutAt < remaining.length) {
-            const lastSpace = remaining.lastIndexOf(' ', cutAt);
-            if (lastSpace > 80) cutAt = lastSpace;
+    mesaChannel
+      .on('broadcast', { event: 'dice_event' }, ({ payload }: { payload: DiceEvent }) => {
+        setDiceLogs(prev => [payload, ...prev.slice(0, 49)]);
+      })
+      .on('broadcast', { event: 'hp_sync' }, ({ payload }: { payload: { charId: number, hp_current: number } }) => {
+        setCharacter(prev => {
+          if (prev && prev.id === payload.charId) {
+            return { ...prev, hp_current: payload.hp_current };
           }
-          chunks.push(remaining.slice(0, cutAt).trim());
-          remaining = remaining.slice(cutAt).trim();
-        }
+          return prev;
+        });
+      })
+      .on('broadcast', { event: 'tts_event' }, ({ payload }: { payload: { text: string } }) => {
+        console.log('[TTS] Event received:', payload.text);
+        if (payload.text) playText(payload.text);
+      })
+      .subscribe();
 
-        for (const chunk of chunks) {
-          const encoded = encodeURIComponent(chunk);
-          try {
-            // Fetch via backend proxy -> Google Translate TTS
-            const res = await fetch(`/api/tts?text=${encoded}`);
-            if (!res.ok) throw new Error(`HTTP ${res.status}`);
-            const buf = await res.arrayBuffer();
-            const blob = new Blob([buf], { type: 'audio/mpeg' });
-            const url = URL.createObjectURL(blob);
-            await new Promise<void>((resolve) => {
-              const audio = new Audio(url);
-              audio.volume = 1.0;
-              audio.onended = () => { URL.revokeObjectURL(url); resolve(); };
-              audio.onerror = (e) => { console.error('[TTS] Audio error:', e); URL.revokeObjectURL(url); resolve(); };
-              audio.play()
-                .then(() => console.log('[TTS] ✅ Playing chunk via Google TTS'))
-                .catch((err) => {
-                  console.error('[TTS] ❌ Autoplay blocked:', err);
-                  resolve();
-                });
-            });
-          } catch (err) {
-            console.error('[TTS] Fetch failed, falling back to Web Speech:', err);
-            // Fallback: Web Speech API
-            if ('speechSynthesis' in window) {
-              await new Promise<void>((resolve) => {
-                window.speechSynthesis.cancel();
-                const utt = new SpeechSynthesisUtterance(chunk);
-                utt.lang = 'pt-BR';
-                utt.pitch = 0.5;
-                utt.rate = 0.8;
-                utt.onend = () => resolve();
-                utt.onerror = () => resolve();
-                window.speechSynthesis.speak(utt);
-              });
-            }
-          }
-        }
-      };
+    setChannel(mesaChannel);
 
-      if (text) {
-        playText(text);
-      } else if (audioChunks && audioChunks.length > 0) {
-        // Legacy: play pre-fetched base64 chunks
-        const playChunks = async () => {
-          for (const chunk of audioChunks) {
-            await new Promise<void>((resolve) => {
-              const binary = atob(chunk);
-              const bytes = new Uint8Array(binary.length);
-              for (let j = 0; j < binary.length; j++) bytes[j] = binary.charCodeAt(j);
-              const blob = new Blob([bytes], { type: 'audio/mpeg' });
-              const url = URL.createObjectURL(blob);
-              const audio = new Audio(url);
-              audio.onended = () => { URL.revokeObjectURL(url); resolve(); };
-              audio.onerror = () => { URL.revokeObjectURL(url); resolve(); };
-              audio.play().catch(() => resolve());
-            });
-          }
-        };
-        playChunks();
+    const playText = async (textToPlay: string) => {
+      // Split into chunks of max 200 chars
+      const chunks: string[] = [];
+      let remaining = textToPlay;
+      while (remaining.length > 0) {
+        let cutAt = Math.min(200, remaining.length);
+        if (cutAt < remaining.length) {
+          const lastSpace = remaining.lastIndexOf(' ', cutAt);
+          if (lastSpace > 80) cutAt = lastSpace;
+        }
+        chunks.push(remaining.slice(0, cutAt).trim());
+        remaining = remaining.slice(cutAt).trim();
       }
-    });
+
+      for (const chunk of chunks) {
+        const encoded = encodeURIComponent(chunk);
+        try {
+          // Fetch via Supabase Edge Function -> Google Translate TTS
+          const res = await fetch(`${EDGE_FUNCTION_URL}?text=${encoded}`, {
+            headers: { 'Authorization': `Bearer ${supabase.auth.getSession().then(({data}) => data.session?.access_token)}` } // Optional: add auth if needed
+          });
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const buf = await res.arrayBuffer();
+          const blob = new Blob([buf], { type: 'audio/mpeg' });
+          const url = URL.createObjectURL(blob);
+          await new Promise<void>((resolve) => {
+            const audio = new Audio(url);
+            audio.onended = () => { URL.revokeObjectURL(url); resolve(); };
+            audio.onerror = () => { URL.revokeObjectURL(url); resolve(); };
+            audio.play().catch(() => resolve());
+          });
+        } catch (err) {
+          console.error('[TTS] Edge Function failed, falling back to Web Speech:', err);
+          if ('speechSynthesis' in window) {
+            await new Promise<void>((resolve) => {
+              window.speechSynthesis.cancel();
+              const utt = new SpeechSynthesisUtterance(chunk);
+              utt.lang = 'pt-BR';
+              utt.onend = () => resolve();
+              utt.onerror = () => resolve();
+              window.speechSynthesis.speak(utt);
+            });
+          }
+        }
+      }
+    };
 
     return () => {
-      newSocket.disconnect();
+      mesaChannel.unsubscribe();
       subscription.unsubscribe();
     };
   }, []);
@@ -304,8 +281,12 @@ const App: React.FC = () => {
   };
 
   const finalizeRoll = () => {
-    if (rollingDice.event && socket) {
-      socket.emit('roll_dice', { salaId: 'default', roll: rollingDice.event });
+    if (rollingDice.event && channel) {
+      channel.send({
+        type: 'broadcast',
+        event: 'dice_event',
+        payload: rollingDice.event
+      });
 
       // Fallback: Add to local logs immediately in case backend is unreliable or just for instant feedback
       setDiceLogs(prev => [rollingDice.event!, ...prev.slice(0, 49)]);
@@ -328,7 +309,11 @@ const App: React.FC = () => {
     if (error) console.error("Erro ao atualizar HP:", error);
     
     setCharacter({ ...character, hp_current: newHP });
-    socket?.emit('update_hp', { salaId: 'default', charId: character.id, hp_current: newHP });
+    channel?.send({
+      type: 'broadcast',
+      event: 'hp_sync',
+      payload: { charId: character.id, hp_current: newHP }
+    });
   };
 
   if (loading) return <div className="min-h-screen flex items-center justify-center text-blue-400 font-bold text-xl animate-pulse">Carregando a Taverna...</div>;
@@ -339,7 +324,7 @@ const App: React.FC = () => {
 
   // DM Dashboard Routing
   if (user?.email === 'admin@admin.com' || user?.email?.startsWith('mestre') || user?.email?.startsWith('admin')) {
-    return <DMDashboard onLogout={() => supabase.auth.signOut()} socket={socket} />;
+    return <DMDashboard onLogout={() => supabase.auth.signOut()} channel={channel} />;
   }
 
   // Waiting Room Logic
