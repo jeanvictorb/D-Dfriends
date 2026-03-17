@@ -261,7 +261,7 @@ const App: React.FC = () => {
   const calculateProficiency = (level: number) => Math.ceil(1 + (level / 4));
 
   const handleRoll = (attrName: string, value: number) => {
-    if (!character || !socket) return;
+    if (!character || !channel) return;
     
     const modifier = calculateModifier(value);
     const naturalRoll = Math.floor(Math.random() * 20) + 1;
