@@ -2,6 +2,7 @@ import React from 'react';
 import { Character } from '../types';
 import { Shield, Plus, LogOut } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { getClassIcon } from '../lib/classIcons';
 
 interface Props {
   characters: Character[];
@@ -38,13 +39,26 @@ export default function CharacterSelection({ characters, onSelect, onCreateNew }
             className="panel hover:bg-[#1e3470] transition-colors text-left flex flex-col cursor-pointer group"
           >
             <div className="flex justify-between items-start mb-4">
-              <h2 className="text-2xl font-bold text-white group-hover:text-blue-300 transition-colors">
-                {char.name}
-              </h2>
+              {/* Class icon */}
+              {(() => {
+                const icon = getClassIcon(char.class_subclass);
+                return (
+                  <div 
+                    className="w-14 h-14 rounded-2xl flex items-center justify-center text-3xl flex-shrink-0"
+                    style={{ backgroundColor: icon.color + '22', border: `1.5px solid ${icon.color}55` }}
+                  >
+                    {icon.emoji}
+                  </div>
+                );
+              })()}
               <span className="text-xs font-bold px-2 py-1 rounded bg-blue-900/50 text-blue-200 border border-blue-500/30">
                 Nível {char.level}
               </span>
             </div>
+
+            <h2 className="text-2xl font-bold text-white group-hover:text-blue-300 transition-colors mb-1">
+              {char.name}
+            </h2>
             
             <p className="text-sm font-medium text-slate-400 mb-6">
               {char.class_subclass}

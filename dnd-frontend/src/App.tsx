@@ -1,17 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { io, Socket } from 'socket.io-client';
 import { Heart, User, LogOut, Package } from 'lucide-react';
-import { Character, DiceEvent } from './types';
-import CharacterCreator from './components/CharacterCreator';
 import { Character, DiceEvent, Profile } from './types';
 import CharacterCreator from './components/CharacterCreator';
 import CharacterSelection from './components/CharacterSelection';
 import Auth from './components/Auth';
 import DMDashboard from './components/DMDashboard';
+import Dice3D from './components/Dice3D';
 import { supabase } from './lib/supabase';
-import { User as SupabaseUser, Session } from '@supabase/supabase-js';
+import { User as SupabaseUser, Session, RealtimeChannel } from '@supabase/supabase-js';
 
-const SOCKET_URL = 'http://localhost:3001';
+const EDGE_FUNCTION_URL = 'https://kgxvjeqjcyphlkuszmoi.supabase.co/functions/v1/tts';
 
 const App: React.FC = () => {
   const [session, setSession] = useState<Session | null>(null);
@@ -23,7 +21,7 @@ const App: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [showCreator, setShowCreator] = useState(false);
   const [diceLogs, setDiceLogs] = useState<DiceEvent[]>([]);
-  const [socket, setSocket] = useState<Socket | null>(null);
+  const [channel, setChannel] = useState<RealtimeChannel | null>(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -52,37 +50,124 @@ const App: React.FC = () => {
       }
     });
 
+    // Initialize Supabase Realtime Channel
+    const mesaChannel = supabase.channel('mesa_default', {
+      config: { broadcast: { self: true } }
+    });
+
+    mesaChannel
+      .on('broadcast', { event: 'dice_event' }, ({ payload }: { payload: DiceEvent }) => {
+        setDiceLogs(prev => [payload, ...prev.slice(0, 49)]);
+      })
+      .on('broadcast', { event: 'hp_sync' }, ({ payload }: { payload: { charId: number, hp_current: number } }) => {
+        setCharacter(prev => {
+          if (prev && prev.id === payload.charId) {
+            return { ...prev, hp_current: payload.hp_current };
+          }
+          return prev;
+        });
+      })
+      .on('broadcast', { event: 'tts_event' }, ({ payload }: { payload: { text: string } }) => {
+        console.log('[TTS] Event received:', payload.text);
+        if (payload.text) playText(payload.text);
+      })
+      .subscribe();
+
+    setChannel(mesaChannel);
+
+    const playText = async (textToPlay: string) => {
+      // Split into chunks of max 200 chars
+      const chunks: string[] = [];
+      let remaining = textToPlay;
+      while (remaining.length > 0) {
+        let cutAt = Math.min(200, remaining.length);
+        if (cutAt < remaining.length) {
+          const lastSpace = remaining.lastIndexOf(' ', cutAt);
+          if (lastSpace > 80) cutAt = lastSpace;
+        }
+        chunks.push(remaining.slice(0, cutAt).trim());
+        remaining = remaining.slice(cutAt).trim();
+      }
+
+      for (const chunk of chunks) {
+        const encoded = encodeURIComponent(chunk);
+        try {
+          // Fetch via Supabase Edge Function -> Google Translate TTS
+          const res = await fetch(`${EDGE_FUNCTION_URL}?text=${encoded}`, {
+            headers: { 'Authorization': `Bearer ${supabase.auth.getSession().then(({data}) => data.session?.access_token)}` } // Optional: add auth if needed
+          });
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const buf = await res.arrayBuffer();
+          const blob = new Blob([buf], { type: 'audio/mpeg' });
+          const url = URL.createObjectURL(blob);
+          await new Promise<void>((resolve) => {
+            const audio = new Audio(url);
+            audio.onended = () => { URL.revokeObjectURL(url); resolve(); };
+            audio.onerror = () => { URL.revokeObjectURL(url); resolve(); };
+            audio.play().catch(() => resolve());
+          });
+        } catch (err) {
+          console.error('[TTS] Edge Function failed, falling back to Web Speech:', err);
+          if ('speechSynthesis' in window) {
+            await new Promise<void>((resolve) => {
+              window.speechSynthesis.cancel();
+              const utt = new SpeechSynthesisUtterance(chunk);
+              utt.lang = 'pt-BR';
+              utt.onend = () => resolve();
+              utt.onerror = () => resolve();
+              window.speechSynthesis.speak(utt);
+            });
+          }
+        }
+      }
+    };
+
+    return () => {
+      mesaChannel.unsubscribe();
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!user) return;
+    
     // Realtime subscription for Profile updates (so the waiting room updates instantly)
     const profileSubscription = supabase
       .channel('public:profiles')
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'profiles' }, (payload) => {
-         if (user && payload.new.id === user.id) {
+         if (payload.new.id === user.id) {
            setProfile(payload.new as Profile);
          }
       })
       .subscribe();
-
-    const newSocket = io(SOCKET_URL);
-    setSocket(newSocket);
-    newSocket.emit('join_mesa', 'default');
-    newSocket.on('dice_event', (event: DiceEvent) => {
-      setDiceLogs(prev => [event, ...prev.slice(0, 49)]);
-    });
-    newSocket.on('hp_sync', ({ charId, hp_current }: { charId: number, hp_current: number }) => {
-      setCharacter(prev => {
-        if (prev && prev.id === charId) {
-          return { ...prev, hp_current };
-        }
-        return prev;
-      });
-    });
-
+      
     return () => {
-      newSocket.disconnect();
-      subscription.unsubscribe();
       profileSubscription.unsubscribe();
     };
-  }, [user]);
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (!character) return;
+
+    // Listen for realtime updates to the current character (e.g. DM changing HP/Items)
+    const charSubscription = supabase
+      .channel(`character_update_${character.id}`)
+      .on('postgres_changes', { 
+        event: 'UPDATE', 
+        schema: 'public', 
+        table: 'characters', 
+        filter: `id=eq.${character.id}` 
+      }, (payload) => {
+        setCharacter(payload.new as Character);
+        // Also update the character in the userCharacters array
+        setUserCharacters(prev => prev.map(c => c.id === payload.new.id ? payload.new as Character : c));
+      })
+      .subscribe();
+
+    return () => {
+      charSubscription.unsubscribe();
+    };
+  }, [character?.id]);
 
   const checkProfileAndCharacters = async (currentUser: SupabaseUser) => {
     setLoading(true);
@@ -170,6 +255,8 @@ const App: React.FC = () => {
     }
   };
 
+  const [rollingDice, setRollingDice] = useState<{ isRolling: boolean, value: number, event: DiceEvent | null }>({ isRolling: false, value: 0, event: null });
+
   const calculateModifier = (value: number) => Math.floor((value - 10) / 2);
   const calculateProficiency = (level: number) => Math.ceil(1 + (level / 4));
 
@@ -189,7 +276,25 @@ const App: React.FC = () => {
       timestamp: new Date().toISOString()
     };
 
-    socket.emit('roll_dice', { salaId: 'default', roll: rollEvent });
+    // Store the event and start rolling animation
+    setRollingDice({ isRolling: true, value: naturalRoll, event: rollEvent });
+  };
+
+  const finalizeRoll = () => {
+    if (rollingDice.event && channel) {
+      channel.send({
+        type: 'broadcast',
+        event: 'dice_event',
+        payload: rollingDice.event
+      });
+
+      // Fallback: Add to local logs immediately in case backend is unreliable or just for instant feedback
+      setDiceLogs(prev => [rollingDice.event!, ...prev.slice(0, 49)]);
+    }
+    // Mostra o resultado por 1,5 segundos depois que "para" de rolar, então fecha o modal
+    setTimeout(() => {
+      setRollingDice({ isRolling: false, value: 0, event: null });
+    }, 1500);
   };
 
   const updateHP = async (amount: number) => {
@@ -204,7 +309,11 @@ const App: React.FC = () => {
     if (error) console.error("Erro ao atualizar HP:", error);
     
     setCharacter({ ...character, hp_current: newHP });
-    socket?.emit('update_hp', { salaId: 'default', charId: character.id, hp_current: newHP });
+    channel?.send({
+      type: 'broadcast',
+      event: 'hp_sync',
+      payload: { charId: character.id, hp_current: newHP }
+    });
   };
 
   if (loading) return <div className="min-h-screen flex items-center justify-center text-blue-400 font-bold text-xl animate-pulse">Carregando a Taverna...</div>;
@@ -215,7 +324,7 @@ const App: React.FC = () => {
 
   // DM Dashboard Routing
   if (user?.email === 'admin@admin.com' || user?.email?.startsWith('mestre') || user?.email?.startsWith('admin')) {
-    return <DMDashboard onLogout={() => supabase.auth.signOut()} />;
+    return <DMDashboard onLogout={() => supabase.auth.signOut()} channel={channel} />;
   }
 
   // Waiting Room Logic
@@ -268,7 +377,14 @@ const App: React.FC = () => {
   }
 
   return (
-    <div className="container mx-auto p-4 lg:p-8 max-w-6xl min-h-screen">
+    <div className="container mx-auto p-4 lg:p-8 max-w-6xl min-h-screen relative">
+      {(rollingDice.isRolling || rollingDice.value > 0) && (
+        <Dice3D 
+          value={rollingDice.value} 
+          isRolling={rollingDice.isRolling} 
+          onAnimationEnd={finalizeRoll} 
+        />
+      )}
       {/* Header */}
       <header className="panel mb-8 flex flex-col md:flex-row justify-between items-center gap-6">
         <div className="flex items-center gap-6">

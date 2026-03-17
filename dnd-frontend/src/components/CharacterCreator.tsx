@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { SRD_DATA } from '../lib/srdData';
+import { CLASS_ICONS } from '../lib/classIcons';
 import { Character } from '../types';
 import { User, Shield, Zap, Heart, Scroll, Dice5, ChevronRight, Check } from 'lucide-react';
 
@@ -43,7 +44,8 @@ const CharacterCreator: React.FC<CharacterCreatorProps> = ({ onCreate }) => {
       charisma: formData.charisma,
       hp_current: hp,
       hp_max: hp,
-      user_id: 1 // Mock user id
+      inventory: [],
+      user_id: 'temp-id' // Will be overridden in App.tsx
     });
   };
 
@@ -69,19 +71,25 @@ const CharacterCreator: React.FC<CharacterCreatorProps> = ({ onCreate }) => {
           <div>
             <label className="block text-sm font-bold text-slate-300 mb-3">Classe</label>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-              {SRD_DATA.dnd_classes.map((c, i) => (
-                <button
-                  key={c.name}
-                  onClick={() => setFormData({...formData, classIdx: i, subclassIdx: -1})}
-                  className={`p-3 rounded-xl border text-sm font-bold transition-colors ${
-                    formData.classIdx === i 
-                    ? 'bg-blue-600 border-blue-500 text-white' 
-                    : 'bg-[#0c1527] border-[#2a4387]/50 text-slate-400 hover:border-blue-500/50 hover:text-white'
-                  }`}
-                >
-                  {c.name}
-                </button>
-              ))}
+              {SRD_DATA.dnd_classes.map((c, i) => {
+                const icon = CLASS_ICONS[c.name] ?? { emoji: '⚔️', color: '#94a3b8', bg: '' };
+                const isSelected = formData.classIdx === i;
+                return (
+                  <button
+                    key={c.name}
+                    onClick={() => setFormData({...formData, classIdx: i, subclassIdx: -1})}
+                    className={`p-3 rounded-xl border text-sm font-bold transition-all flex flex-col items-center gap-2 ${
+                      isSelected
+                      ? 'border-2 scale-105 shadow-lg text-white'
+                      : 'bg-[#0c1527] border-[#2a4387]/50 text-slate-400 hover:border-blue-500/50 hover:text-white'
+                    }`}
+                    style={isSelected ? { borderColor: icon.color, backgroundColor: icon.color + '22', color: icon.color } : {}}
+                  >
+                    <span className="text-2xl">{icon.emoji}</span>
+                    <span>{c.name}</span>
+                  </button>
+                );
+              })}
             </div>
           </div>
 
