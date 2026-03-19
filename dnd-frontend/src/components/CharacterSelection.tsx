@@ -1,6 +1,6 @@
 import React from 'react';
 import { Character } from '../types';
-import { Shield, Plus, LogOut } from 'lucide-react';
+import { Shield, Plus, LogOut, Trash2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { getClassIcon } from '../lib/classIcons';
 
@@ -8,9 +8,10 @@ interface Props {
   characters: Character[];
   onSelect: (char: Character) => void;
   onCreateNew: () => void;
+  onDelete: (id: number) => void;
 }
 
-export default function CharacterSelection({ characters, onSelect, onCreateNew }: Props) {
+export default function CharacterSelection({ characters, onSelect, onCreateNew, onDelete }: Props) {
   const handleLogout = async () => {
     await supabase.auth.signOut();
   };
@@ -36,8 +37,15 @@ export default function CharacterSelection({ characters, onSelect, onCreateNew }
           <button
             key={char.id}
             onClick={() => onSelect(char)}
-            className="panel hover:bg-[#1e3470] transition-colors text-left flex flex-col cursor-pointer group"
+            className="panel hover:bg-[#1e3470] transition-colors text-left flex flex-col cursor-pointer group relative"
           >
+            <button 
+              onClick={(e) => { e.stopPropagation(); onDelete(char.id); }}
+              className="absolute top-4 right-4 p-2 text-slate-500 hover:text-red-500 transition-colors bg-slate-900/40 rounded-lg border border-slate-700/50 opacity-0 group-hover:opacity-100"
+              title="Deletar Personagem"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
             <div className="flex justify-between items-start mb-4">
               {/* Class icon */}
               {(() => {

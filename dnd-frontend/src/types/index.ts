@@ -13,6 +13,8 @@ export interface Character {
   hp_max: number;
   user_id: string; // Updated to string since Supabase Auth uses UUID
   inventory: InventoryItem[];
+  xp: number;
+  conditions: string[];
   created_at: string;
 }
 

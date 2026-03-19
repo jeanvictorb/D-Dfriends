@@ -14,13 +14,29 @@ const CharacterCreator: React.FC<CharacterCreatorProps> = ({ onCreate }) => {
     name: '',
     classIdx: -1,
     subclassIdx: -1,
-    strength: 10,
-    dexterity: 10,
-    constitution: 10,
-    intelligence: 10,
-    wisdom: 10,
-    charisma: 10
+    strength: 8,
+    dexterity: 8,
+    constitution: 8,
+    intelligence: 8,
+    wisdom: 8,
+    charisma: 8
   });
+
+  const getPointCost = (score: number) => {
+    if (score <= 8) return 0;
+    if (score <= 13) return score - 8;
+    if (score === 14) return 7;
+    if (score === 15) return 9;
+    return score > 15 ? 9 : 0;
+  };
+
+  const pointsSpent = 
+    getPointCost(formData.strength) +
+    getPointCost(formData.dexterity) +
+    getPointCost(formData.constitution) +
+    getPointCost(formData.intelligence) +
+    getPointCost(formData.wisdom) +
+    getPointCost(formData.charisma);
 
   const selectedClass = formData.classIdx >= 0 ? SRD_DATA.dnd_classes[formData.classIdx] : null;
 
@@ -126,6 +142,13 @@ const CharacterCreator: React.FC<CharacterCreatorProps> = ({ onCreate }) => {
 
       {step === 2 && (
         <div className="space-y-6">
+          <div className="bg-blue-900/20 border border-blue-500/30 rounded-xl p-4 flex justify-between items-center mb-6">
+            <span className="text-sm font-bold text-blue-300 uppercase">Pontos Restantes (Point Buy)</span>
+            <span className={`text-2xl font-black ${27 - pointsSpent < 0 ? 'text-red-500' : 'text-white'}`}>
+              {27 - pointsSpent}
+            </span>
+          </div>
+
           <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
             {[
               { label: 'Força', key: 'strength' },
@@ -137,12 +160,23 @@ const CharacterCreator: React.FC<CharacterCreatorProps> = ({ onCreate }) => {
             ].map((attr) => (
               <div key={attr.key} className="bg-[#0c1527] p-4 rounded-xl flex flex-col items-center border border-[#2a4387]/50">
                 <span className="text-xs font-bold text-slate-400 mb-2">{attr.label}</span>
-                <input 
-                  type="number" 
-                  value={formData[attr.key as keyof typeof formData]}
-                  onChange={(e) => setFormData({...formData, [attr.key]: parseInt(e.target.value) || 0})}
-                  className="w-16 bg-transparent text-2xl font-bold text-center text-white border-b border-[#2a4387] focus:border-blue-500 outline-none transition-colors mb-2"
-                />
+                <div className="flex items-center gap-4 mb-2">
+                  <button 
+                    onClick={() => setFormData({...formData, [attr.key]: Math.max(8, (formData[attr.key as keyof typeof formData] as number) - 1)})}
+                    className="w-8 h-8 rounded-full bg-slate-800 text-white flex items-center justify-center hover:bg-slate-700 transition-colors font-bold"
+                  >
+                    -
+                  </button>
+                  <span className="text-2xl font-bold text-white w-8 text-center">
+                    {formData[attr.key as keyof typeof formData]}
+                  </span>
+                  <button 
+                    onClick={() => setFormData({...formData, [attr.key]: Math.min(15, (formData[attr.key as keyof typeof formData] as number) + 1)})}
+                    className="w-8 h-8 rounded-full bg-slate-800 text-white flex items-center justify-center hover:bg-slate-700 transition-colors font-bold"
+                  >
+                    +
+                  </button>
+                </div>
                 <div className="px-2 py-1 rounded bg-[#15234b] text-xs font-bold text-blue-300">
                   Mod {Math.floor(((formData[attr.key as keyof typeof formData] as number) - 10) / 2) >= 0 ? '+' : ''}
                   {Math.floor(((formData[attr.key as keyof typeof formData] as number) - 10) / 2)}
@@ -160,7 +194,8 @@ const CharacterCreator: React.FC<CharacterCreatorProps> = ({ onCreate }) => {
             </button>
             <button 
               onClick={handleCreate}
-              className="flex-[2] py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl transition-colors"
+              disabled={pointsSpent > 27}
+              className="flex-[2] py-3 bg-blue-600 hover:bg-blue-500 disabled:opacity-30 text-white font-bold rounded-xl transition-colors"
             >
                Gerar Personagem
             </button>
