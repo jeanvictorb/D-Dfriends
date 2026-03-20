@@ -1,25 +1,29 @@
 import React, { useState, useEffect } from 'react';
-import { Shield, Users, Heart, PackagePlus, Loader2, LogOut, CheckCircle, Trash2, Mic, Swords, Volume2, Skull, Sparkles, Zap, Flame, Droplets, Plus, Dice5, ChevronRight, Ghost, BookOpen, HelpCircle, Info } from 'lucide-react';
-import { Character, InventoryItem, Profile } from '../types';
+import { Shield, Users, Heart, PackagePlus, Loader2, LogOut, CheckCircle, Trash2, Mic, Swords, Volume2, Skull, Sparkles, Zap, Flame, Droplets, Plus, Dice5, ChevronRight, Ghost, BookOpen, HelpCircle, Info, User, Target } from 'lucide-react';
+import { Character, InventoryItem, Profile, DiceEvent } from '../types';
 import { supabase } from '../lib/supabase';
 import { RealtimeChannel } from '@supabase/supabase-js';
 import { getClassIcon } from '../lib/classIcons';
 import { generateRandomNPC } from '../lib/npcGenerator';
 import ClassCompendium from './ClassCompendium';
+import BattleMap from './BattleMap';
 
 interface Props {
   onLogout: () => void;
   channel?: RealtimeChannel | null;
+  viewMode: 'standard' | 'theater' | 'map';
+  backgroundUrl: string;
+  diceLogs: DiceEvent[];
 }
 
-export default function DMDashboard({ onLogout, channel }: Props) {
+export default function DMDashboard({ onLogout, channel, viewMode, backgroundUrl, diceLogs }: Props) {
   const [characters, setCharacters] = useState<Character[]>([]);
   const [pendingProfiles, setPendingProfiles] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedChar, setSelectedChar] = useState<Character | null>(null);
 
   // Tabs State
-  const [activeTab, setActiveTab] = useState<'characters' | 'combat' | 'sounds' | 'rules'>('characters');
+  const [activeTab, setActiveTab] = useState<'characters' | 'combat' | 'sounds' | 'rules' | 'scenes'>('characters');
   const [showCompendium, setShowCompendium] = useState(false);
 
   // Combat State
@@ -34,8 +38,19 @@ export default function DMDashboard({ onLogout, channel }: Props) {
   // Voice AI State
   const [ttsMessage, setTtsMessage] = useState('');
 
-  // Dice Log State
-  const [diceLogs, setDiceLogs] = useState<any[]>([]);
+  const handleRoll = (dieType: string, dieSize: number) => {
+    if (!channel) return;
+    const naturalRoll = Math.floor(Math.random() * dieSize) + 1;
+    const event: DiceEvent = {
+      player: 'Mestre',
+      dieType,
+      naturalRoll,
+      modifier: 0,
+      total: naturalRoll,
+      timestamp: new Date().toISOString()
+    };
+    channel.send({ type: 'broadcast', event: 'dice_event', payload: event });
+  };
 
   useEffect(() => {
     fetchCharacters();
@@ -51,17 +66,9 @@ export default function DMDashboard({ onLogout, channel }: Props) {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, fetchPendingProfiles)
       .subscribe();
 
-    const diceSub = supabase
-      .channel('dm_dice')
-      .on('broadcast', { event: 'dice_event' }, ({ payload }) => {
-        setDiceLogs(prev => [payload, ...prev].slice(0, 50));
-      })
-      .subscribe();
-
     return () => {
       charSub.unsubscribe();
       profileSub.unsubscribe();
-      diceSub.unsubscribe();
     };
   }, []);
 
@@ -123,6 +130,14 @@ export default function DMDashboard({ onLogout, channel }: Props) {
 
   const syncCombat = (participants: typeof combatParticipants) => {
     if (channel) channel.send({ type: 'broadcast', event: 'combat_update', payload: participants });
+  };
+
+  const setViewMode = (mode: 'standard' | 'theater' | 'map') => {
+    if (channel) channel.send({ type: 'broadcast', event: 'view_update', payload: { mode } });
+  };
+
+  const setBackground = (url: string) => {
+    if (channel) channel.send({ type: 'broadcast', event: 'background_update', payload: { url } });
   };
 
   const addToCombat = (char: Character) => {
@@ -205,7 +220,8 @@ export default function DMDashboard({ onLogout, channel }: Props) {
               { id: 'characters', label: 'Jogadores', icon: Users },
               { id: 'combat', label: 'Combate', icon: Swords },
               { id: 'rules', label: 'Regras', icon: HelpCircle },
-              { id: 'sounds', label: 'Ambiente', icon: Volume2 }
+              { id: 'sounds', label: 'Ambiente', icon: Volume2 },
+              { id: 'scenes', label: 'Cenário', icon: Sparkles }
             ].map(tab => (
               <button key={tab.id} onClick={() => setActiveTab(tab.id as any)} className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-sm transition-all ${activeTab === tab.id ? 'bg-blue-600 text-white shadow-lg' : 'bg-[#0c1527] text-slate-400 border border-[#2a4387]/30'}`}>
                 <tab.icon className="w-4 h-4" /> {tab.label}
@@ -228,7 +244,19 @@ export default function DMDashboard({ onLogout, channel }: Props) {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2 space-y-6">
-          {activeTab === 'characters' && (
+          {viewMode === 'map' ? (
+            <div className="col-span-full">
+              <BattleMap 
+                partyCharacters={characters} 
+                channel={channel!} 
+                isAdmin={true} 
+                backgroundUrl={backgroundUrl}
+                onBack={() => setViewMode('standard')}
+              />
+            </div>
+          ) : (
+            <>
+              {activeTab === 'characters' && (
             <>
               {/* Party Composition Summary */}
               <div className="flex flex-wrap gap-2 mb-4 bg-[#0c1527]/40 p-4 rounded-xl border border-[#2a4387]/30">
@@ -364,59 +392,104 @@ export default function DMDashboard({ onLogout, channel }: Props) {
             </div>
           )}
 
-          {activeTab === 'rules' && (
-            <div className="space-y-6 animate-in fade-in duration-500">
-               <div className="panel bg-[#0c1527]/40 border-blue-500/30 p-8">
-                  <h3 className="text-2xl font-black text-white mb-6 flex items-center gap-3">
-                    <Info className="text-blue-400 w-8 h-8" /> Guia de Atributos & Regras
-                  </h3>
-                  
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                    <div className="space-y-4">
-                      <h4 className="text-blue-400 font-black uppercase text-xs tracking-widest">Como funcionam os Testes?</h4>
-                      <p className="text-slate-400 text-sm leading-relaxed">
-                        Em D&D 5e, quase tudo é decidido por: <br/>
-                        <span className="text-white font-bold bg-blue-600/20 px-2 py-0.5 rounded italic">1d20 + Atributo + Proficiência (se treinado)</span>
-                      </p>
-                      
-                      <div className="bg-slate-900/60 p-4 rounded-xl border border-[#2a4387]/30 space-y-3">
-                        <div className="flex justify-between items-center text-xs">
-                          <span className="text-white font-bold">Cálculo do Modificador</span>
-                          <span className="text-blue-400 font-mono">(Valor - 10) / 2</span>
-                        </div>
-                        <div className="grid grid-cols-3 gap-2 text-[10px] text-center">
-                          <div className="bg-slate-800 p-2 rounded"><span>Atrib: 10</span><br/><span className="text-slate-500">Mod: +0</span></div>
-                          <div className="bg-slate-800 p-2 rounded"><span>Atrib: 14</span><br/><span className="text-green-500">Mod: +2</span></div>
-                          <div className="bg-slate-800 p-2 rounded"><span>Atrib: 8</span><br/><span className="text-red-500">Mod: -1</span></div>
-                        </div>
-                      </div>
-                    </div>
+          {activeTab === 'scenes' && (
+            <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+              <section className="panel bg-[#0c1527]/40 border-blue-500/30">
+                <h3 className="text-xl font-black text-white mb-6 flex items-center gap-3">
+                  <Swords className="text-blue-400 w-6 h-6" /> Modo de Visualização
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {[
+                    { id: 'standard', label: 'Ficha Padrão', desc: 'Foco nos atributos e inventário.', icon: User },
+                    { id: 'theater', label: 'Teatro da Mente', desc: 'Imersão visual com cenário e log.', icon: Sparkles },
+                    { id: 'map', label: 'Mapa de Batalha', desc: 'Combate tático com grid e tokens.', icon: Target }
+                  ].map(mode => (
+                    <button
+                      key={mode.id}
+                      onClick={() => setViewMode(mode.id as any)}
+                      className={`p-6 rounded-2xl border-2 transition-all text-left flex flex-col gap-2 ${viewMode === mode.id ? 'bg-blue-600/20 border-blue-500 shadow-[0_0_20px_rgba(59,130,246,0.2)]' : 'bg-[#0c1527] border-[#2a4387]/30 hover:border-blue-500/50'}`}
+                    >
+                      <mode.icon className={`w-8 h-8 ${viewMode === mode.id ? 'text-blue-400' : 'text-slate-500'}`} />
+                      <span className="font-black text-white uppercase tracking-wider">{mode.label}</span>
+                      <span className="text-xs text-slate-400 font-medium">{mode.desc}</span>
+                    </button>
+                  ))}
+                </div>
+              </section>
 
-                    <div className="space-y-4">
-                       <h4 className="text-blue-400 font-black uppercase text-xs tracking-widest">Os 6 Atributos</h4>
-                       <div className="grid grid-cols-2 gap-3">
-                          {[
-                            { name: 'Força', desc: 'Poder físico e peso.' },
-                            { name: 'Destreza', desc: 'Agilidade e reflexos.' },
-                            { name: 'Constituição', desc: 'Saúde e resistência.' },
-                            { name: 'Inteligência', desc: 'Memória e estudo.' },
-                            { name: 'Sabedoria', desc: 'Percepção e intuição.' },
-                            { name: 'Carisma', desc: 'Presença e lábia.' }
-                          ].map(a => (
-                            <div key={a.name} className="p-2 bg-slate-900/40 rounded border border-blue-500/10">
-                              <span className="text-white font-bold text-xs block">{a.name}</span>
-                              <span className="text-[10px] text-slate-500">{a.desc}</span>
-                            </div>
-                          ))}
-                       </div>
-                    </div>
+              <section className="panel bg-[#0c1527]/40 border-purple-500/30">
+                <h3 className="text-xl font-black text-white mb-6 flex items-center gap-3">
+                  <Sparkles className="text-purple-400 w-6 h-6" /> Cenários Predefinidos
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {[
+                    { name: 'Taverna Aconchegante', url: '/images/scenes/taverna.png', color: 'bg-amber-900/40 border-amber-500/30' },
+                    { name: 'Porão Sombrio', url: '/images/scenes/porao.png', color: 'bg-slate-900/40 border-slate-500/30' },
+                    { name: 'Tumba Antiga', url: '/images/scenes/tumba.png', color: 'bg-emerald-900/40 border-emerald-500/30' }
+                  ].map(scene => (
+                    <button
+                      key={scene.url}
+                      onClick={() => setBackground(scene.url)}
+                      className={`group relative h-32 rounded-2xl overflow-hidden border-2 transition-all ${backgroundUrl === scene.url ? 'border-white ring-2 ring-purple-500/50' : 'border-transparent'}`}
+                    >
+                      <div 
+                        className="absolute inset-0 bg-cover bg-center transition-transform group-hover:scale-110" 
+                        style={{ backgroundImage: `url(${scene.url})` }}
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent flex items-end p-4">
+                        <span className="text-xs font-black text-white uppercase tracking-widest">{scene.name}</span>
+                      </div>
+                      {backgroundUrl === scene.url && (
+                        <div className="absolute top-2 right-2 bg-white text-purple-600 p-1 rounded-full">
+                          <CheckCircle className="w-3 h-3" />
+                        </div>
+                      )}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="mt-8 pt-8 border-t border-[#2a4387]/30">
+                  <h4 className="text-xs font-black text-slate-500 uppercase mb-4 tracking-widest">URL de Cenário Personalizado</h4>
+                  <div className="flex gap-2">
+                    <input 
+                      type="text" 
+                      placeholder="https://exemplo.com/imagem.jpg"
+                      className="flex-1 bg-[#0c1527] border border-[#2a4387]/50 rounded-xl px-4 py-3 text-white text-sm outline-none focus:border-purple-500"
+                      onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
+                        if (e.key === 'Enter') {
+                          setBackground(e.currentTarget.value);
+                          e.currentTarget.value = '';
+                        }
+                      }}
+                    />
                   </div>
-               </div>
+                </div>
+              </section>
             </div>
+          )}
+          </>
           )}
         </div>
 
         <div className="space-y-6">
+          {/* DM Dice Tray */}
+          <div className="panel bg-[#0c1527]/60 border-amber-500/30">
+            <h3 className="text-xs font-black text-amber-400 uppercase mb-4 flex items-center gap-2">
+              <Dice5 className="w-4 h-4" /> Dados do Mestre
+            </h3>
+            <div className="flex flex-wrap gap-2">
+              {[4, 6, 8, 10, 12, 20, 100].map(die => (
+                <button
+                  key={die}
+                  onClick={() => handleRoll(`d${die}`, die)}
+                  className="w-10 h-10 bg-amber-900/20 border border-amber-500/30 rounded-lg flex items-center justify-center font-black text-xs text-amber-200 hover:bg-amber-600 hover:text-white transition-all active:scale-95"
+                >
+                  {die === 100 ? '%' : `d${die}`}
+                </button>
+              ))}
+            </div>
+          </div>
+
           <div className="panel flex flex-col">
             <h3 className="text-sm font-black text-white uppercase mb-4 flex items-center gap-2"><Mic className="w-4 h-4 text-purple-400" /> Voz do Mestre</h3>
             <form onSubmit={handleTTS} className="space-y-3">

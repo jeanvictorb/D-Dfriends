@@ -40,3 +40,25 @@ export interface DiceEvent {
   total: number;
   timestamp: string;
 }
+
+export interface Token {
+  id: string | number;
+  name: string;
+  x: number;
+  y: number;
+  color: string;
+  icon?: string;
+  type: 'player' | 'monster' | 'object';
+  subType?: string;
+  size?: number;
+  hp?: { current: number; max: number };
+  hidden?: boolean;
+  discovered?: boolean;
+}
+
+export interface CombatItem {
+  name: string;
+  initiative: number;
+  charId?: number;
+  isTurn: boolean;
+}

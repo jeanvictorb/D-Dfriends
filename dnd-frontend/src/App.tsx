@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Heart, User, LogOut, Package, BookOpen, Star, HelpCircle, Info, Users, Swords, Zap, Skull, Shield as ShieldIcon, Flame, Droplets, Wind, Ghost, Shield, PackagePlus, Loader2, CheckCircle, Trash2, Mic, Volume2, Sparkles, Plus, Dice5, ChevronRight } from 'lucide-react';
-import { Character, DiceEvent, Profile } from './types';
+import { Character, DiceEvent, Profile, CombatItem } from './types/index';
 import CharacterCreator from './components/CharacterCreator';
 import CharacterSelection from './components/CharacterSelection';
 import Auth from './components/Auth';
@@ -9,6 +9,8 @@ import Dice3D from './components/Dice3D';
 import ClassCompendium from './components/ClassCompendium';
 import SkillTree from './components/SkillTree';
 import CompanionModal from './components/CompanionModal';
+import TheaterView from './components/TheaterView';
+import BattleMap from './components/BattleMap';
 import { classData, ClassData } from './data/classData';
 import { supabase } from './lib/supabase';
 import { getClassIcon } from './lib/classIcons';
@@ -26,12 +28,14 @@ const App: React.FC = () => {
   const [userCharacters, setUserCharacters] = useState<Character[]>([]);
   const [partyCharacters, setPartyCharacters] = useState<Character[]>([]);
   const [selectedCompanion, setSelectedCompanion] = useState<Character | null>(null);
-  const [combatOrder, setCombatOrder] = useState<any[]>([]);
+  const [combatOrder, setCombatOrder] = useState<CombatItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreator, setShowCreator] = useState(false);
   const [diceLogs, setDiceLogs] = useState<DiceEvent[]>([]);
   const [channel, setChannel] = useState<RealtimeChannel | null>(null);
   const [showCompendium, setShowCompendium] = useState(false);
+  const [viewMode, setViewMode] = useState<'standard' | 'theater' | 'map'>('standard');
+  const [backgroundUrl, setBackgroundUrl] = useState('/images/scenes/taverna.png');
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -67,10 +71,10 @@ const App: React.FC = () => {
 
     mesaChannel
       .on('broadcast', { event: 'dice_event' }, ({ payload }: { payload: DiceEvent }) => {
-        setDiceLogs(prev => [payload, ...prev.slice(0, 49)]);
+        setDiceLogs((prev: DiceEvent[]) => [payload, ...prev.slice(0, 49)]);
       })
       .on('broadcast', { event: 'hp_sync' }, ({ payload }: { payload: { charId: number, hp_current: number } }) => {
-        setCharacter(prev => {
+        setCharacter((prev: Character | null) => {
           if (prev && prev.id === payload.charId) {
             return { ...prev, hp_current: payload.hp_current };
           }
@@ -93,7 +97,7 @@ const App: React.FC = () => {
         const audio = new Audio(payload.url);
         audio.play().then(() => {
           console.log('[SOUND] Audio playing successfully');
-        }).catch(e => {
+        }).catch((e: Error) => {
           console.error("[SOUND] Play failed:", e);
           if (e.name === 'NotAllowedError') {
             console.warn('[SOUND] Browser blocked autoplay. User must interact with page first.');
@@ -103,7 +107,13 @@ const App: React.FC = () => {
       .on('broadcast', { event: 'combat_update' }, ({ payload }: { payload: any[] }) => {
         setCombatOrder(payload);
       })
-      .subscribe((status) => {
+      .on('broadcast', { event: 'view_update' }, ({ payload }: { payload: { mode: 'standard' | 'theater' | 'map' } }) => {
+        setViewMode(payload.mode);
+      })
+      .on('broadcast', { event: 'background_update' }, ({ payload }: { payload: { url: string } }) => {
+        setBackgroundUrl(payload.url);
+      })
+      .subscribe((status: string) => {
         console.log('[REALTIME] Mesa channel status:', status);
       });
 
@@ -171,7 +181,7 @@ const App: React.FC = () => {
     // Realtime subscription for Profile updates (so the waiting room updates instantly)
     const profileSubscription = supabase
       .channel('public:profiles')
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'profiles' }, (payload) => {
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'profiles' }, (payload: { new: Profile }) => {
         if (payload.new.id === user.id) {
           setProfile(payload.new as Profile);
         }
@@ -203,10 +213,10 @@ const App: React.FC = () => {
         schema: 'public',
         table: 'characters',
         filter: `id=eq.${character.id}`
-      }, (payload) => {
+      }, (payload: { new: Character }) => {
         setCharacter(payload.new as Character);
         // Also update the character in the userCharacters array
-        setUserCharacters(prev => prev.map(c => c.id === payload.new.id ? payload.new as Character : c));
+        setUserCharacters((prev: Character[]) => prev.map((c: Character) => c.id === payload.new.id ? payload.new as Character : c));
       })
       .subscribe();
 
@@ -424,7 +434,15 @@ const App: React.FC = () => {
 
   // DM Dashboard Routing
   if (user?.email === 'admin@admin.com' || user?.email?.startsWith('mestre') || user?.email?.startsWith('admin')) {
-    return <DMDashboard onLogout={() => supabase.auth.signOut()} channel={channel} />;
+    return (
+      <DMDashboard 
+        onLogout={() => supabase.auth.signOut()} 
+        channel={channel} 
+        viewMode={viewMode}
+        backgroundUrl={backgroundUrl}
+        diceLogs={diceLogs}
+      />
+    );
   }
 
   // Waiting Room Logic
@@ -583,247 +601,270 @@ const App: React.FC = () => {
         </div>
       </header>
 
-      {/* Combat Tracker (Initiative) Overlay */}
-      {combatOrder.length > 0 && (
-        <div className="panel bg-[#0c1527]/90 border-blue-500/50 backdrop-blur-md mb-8 animate-in slide-in-from-top duration-500">
-          <h2 className="text-xs font-black text-blue-400 uppercase tracking-[0.2em] mb-4 flex items-center gap-2">
-            <Swords className="w-4 h-4" /> Ordem de Combate
-          </h2>
-          <div className="flex gap-4 overflow-x-auto pb-2 custom-scrollbar">
-            {combatOrder.map((item, idx) => {
-              const isCurrent = item.isTurn;
-              const isMyTurn = item.charId === character?.id && isCurrent;
-              
-              return (
-                <div 
-                  key={idx} 
-                  className={`min-w-[120px] p-3 rounded-xl border transition-all ${isCurrent ? 'bg-blue-600/20 border-blue-500 ring-2 ring-blue-500/30' : 'bg-slate-900/50 border-slate-700/50'}`}
-                >
-                  <div className="flex justify-between items-center mb-1">
-                    <span className={`text-[10px] font-black ${isCurrent ? 'text-blue-300' : 'text-slate-500'}`}>#{idx + 1}</span>
-                    <span className="text-[10px] font-bold text-white bg-slate-800 px-1 rounded">{item.initiative}</span>
-                  </div>
-                  <p className={`text-sm font-bold truncate ${isCurrent ? 'text-white' : 'text-slate-400'}`}>{item.name}</p>
-                  {isMyTurn && (
-                    <div className="mt-2 text-[9px] font-black text-blue-400 animate-pulse uppercase tracking-widest text-center italic">Seu Turno!</div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-        {/* Main Stats */}
-        <div className="lg:col-span-3 space-y-6">
-          {/* Health Section */}
-          <section className="panel">
-            <div className="flex justify-between items-end mb-4">
-              <div className="flex items-center gap-3">
-                <Heart className="text-rose-500 w-5 h-5" />
-                <h2 className="text-lg font-bold text-white">Pontos de Vida</h2>
-              </div>
-              <p className="text-2xl font-bold text-white">
-                {character.hp_current} <span className="text-slate-400 text-xl font-normal">/ {character.hp_max}</span>
-              </p>
-            </div>
-
-            <div className="w-full h-3 bg-[#0c1527] rounded-full overflow-hidden">
-              <div
-                className="h-full bg-blue-500 transition-all duration-300"
-                style={{ width: `${(character.hp_current / character.hp_max) * 100}%` }}
-              ></div>
-            </div>
-          </section>
-
-          {/* Dice Tray */}
-          <section className="panel bg-[#0c1527]/40 border-blue-500/20">
+      <div className="max-w-[1700px] mx-auto px-4 sm:px-6 lg:px-8 py-8 relative z-10">
+        {/* Combat Tracker (Initiative) Overlay */}
+        {combatOrder.length > 0 && (
+          <div className="panel bg-[#0c1527]/90 border-blue-500/50 backdrop-blur-md mb-8 animate-in slide-in-from-top duration-500">
             <h2 className="text-xs font-black text-blue-400 uppercase tracking-[0.2em] mb-4 flex items-center gap-2">
-              <Dice5 className="w-4 h-4" /> Bandeja de Dados (Danos e Testes)
+              <Swords className="w-4 h-4" /> Ordem de Combate
             </h2>
-            <div className="flex flex-wrap gap-3">
-              {[
-                { label: 'd4', size: 4, desc: 'Danos pequenos (Adagas, Clavas) e feitiços como Bênção.' },
-                { label: 'd6', size: 6, desc: 'Armas comuns (Espadas Curtas, Arcos) e a clássica Bola de Fogo.' },
-                { label: 'd8', size: 8, desc: 'Armas marciais (Espadas Longas, Rapiárias) e Curar Ferimentos.' },
-                { label: 'd10', size: 10, desc: 'Armas pesadas ou habilidades de classe como Rajada Mística.' },
-                { label: 'd12', size: 12, desc: 'Machados de Batalha enormes e a Fúria do Bárbaro.' },
-                { label: 'd20', size: 20, desc: 'O dado principal! Usado para Ataques, Testes e Resistências.' },
-                { label: 'd100', size: 100, desc: 'Usado para tabelas de sorte raras e Intervenção Divina.' },
-              ].map((die) => (
-                <button
-                  key={die.label}
-                  onClick={() => handleDiceRoll(die.label, die.size)}
-                  className="flex-1 min-w-[80px] group relative bg-[#15234b] border border-[#2a4387]/50 rounded-xl p-3 hover:border-blue-500 hover:bg-blue-600/20 transition-all active:scale-95"
-                >
-                  <span className="text-lg font-black text-white group-hover:text-blue-200">{die.label}</span>
-                  {/* Tooltip */}
-                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 w-48 p-2 bg-slate-900 border border-slate-700 rounded-lg text-[10px] text-slate-300 font-bold opacity-0 group-hover:opacity-100 transition-opacity z-50 pointer-events-none shadow-2xl">
-                    {die.desc}
-                  </div>
-                </button>
-              ))}
-            </div>
-          </section>
-
-          {/* Attributes Grid */}
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-            {[
-              { label: 'FORÇA', val: character.strength, desc: 'Poder físico, atletismo e dano corpo-a-corpo.' },
-              { label: 'DESTREZA', val: character.dexterity, desc: 'Agilidade, reflexos, equilíbrio e precisão.' },
-              { label: 'CONSTITUIÇÃO', val: character.constitution, desc: 'Saúde, vigor e resistência vital.' },
-              { label: 'INTELIGÊNCIA', val: character.intelligence, desc: 'Raciocínio lógico, memória e saber arcano.' },
-              { label: 'SABEDORIA', val: character.wisdom, desc: 'Percepção, intuição e conexão com o mundo.' },
-              { label: 'CARISMA', val: character.charisma, desc: 'Personalidade, persuasão e liderança.' },
-            ].map((attr) => (
-              <button
-                key={attr.label}
-                onClick={() => handleRoll(attr.label, attr.val)}
-                className="panel hover:bg-[#1e3470] cursor-pointer flex flex-col items-center justify-center py-6 px-4 transition-all group relative overflow-visible"
-              >
-                <div className="flex items-center gap-1 mb-2">
-                  <span className="text-xs font-bold text-slate-400 group-hover:text-blue-300 transition-colors">{attr.label}</span>
-                  <HelpCircle className="w-3 h-3 text-slate-600 opacity-50" />
-                </div>
-                <span className="text-3xl font-bold text-white mb-2">{attr.val}</span>
-                <div className="text-sm font-medium text-blue-300">
-                  ({calculateModifier(attr.val) >= 0 ? '+' : ''}{calculateModifier(attr.val)})
-                </div>
-                
-                {/* Tooltip */}
-                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-56 p-3 bg-slate-900 border border-slate-700 rounded-xl text-xs text-slate-400 font-medium opacity-0 group-hover:opacity-100 transition-opacity z-50 pointer-events-none shadow-2xl text-center">
-                  <p className="mb-2 text-white font-bold">{attr.desc}</p>
-                  <div className="pt-2 border-t border-slate-700/50 text-[10px] italic">
-                    Cálculo: (Valor - 10) / 2 <br/>
-                    Ex: 16 vira +3, 8 vira -1.
-                  </div>
-                </div>
-              </button>
-            ))}
-          </div>
-
-          {/* Inventory / Backpack */}
-          <section className="panel mt-6">
-            <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
-              <Package className="w-5 h-5 text-amber-500" />
-              Sua Mochila
-            </h2>
-            <div className="bg-[#0c1527] rounded-xl border border-[#2a4387]/50 p-4 min-h-[120px]">
-              {character.inventory && character.inventory.length > 0 ? (
-                <ul className="space-y-3">
-                  {character.inventory.map(item => (
-                    <li key={item.id} className="flex justify-between items-center border-b border-[#2a4387]/30 pb-2 last:border-0 last:pb-0">
-                      <div>
-                        <span className="font-bold text-blue-300">{item.name} <span className="text-slate-500 text-xs ml-1">x{item.quantity}</span></span>
-                        {item.description && <p className="text-xs text-slate-400 mt-1">{item.description}</p>}
-                      </div>
-                      <span className="text-xs font-bold px-2 py-1 bg-blue-900/40 text-blue-400 rounded border border-blue-500/20 capitalize">{item.type}</span>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <div className="flex flex-col items-center justify-center text-slate-500 py-6">
-                  <Package className="w-8 h-8 opacity-30 mb-2" />
-                  <span className="text-sm font-medium">Sua mochila está vazia...</span>
-                </div>
-              )}
-            </div>
-          </section>
-
-          {/* Skill Tree directly on the sheet */}
-          {currentCharClassData && (
-            <section className="panel mt-6 overflow-hidden relative group">
-              <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
-                <div>
-                  <h2 className="text-xl font-bold text-white flex items-center gap-2">
-                    <Star className="w-5 h-5 text-blue-400" />
-                    Suas Habilidades de {currentCharClassData.name}
-                  </h2>
-                  <p className="text-sm text-slate-400 mt-1 max-w-xl">
-                    Esta é a sua progressão de classe. Conforme você sobe de nível, desbloqueia novas capacidades marciais e mágicas únicas.
-                  </p>
-                </div>
-                <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-900/30 border border-blue-500/20 rounded-lg">
-                  <Info className="w-4 h-4 text-blue-400" />
-                  <span className="text-xs font-bold text-blue-300">Nível {character.level}</span>
-                </div>
-              </div>
-              <div className="bg-[#0c1527]/50 rounded-2xl border border-[#2a4387]/30">
-                <SkillTree 
-                  abilities={currentCharClassData.abilities} 
-                  color={currentCharClassData.color} 
-                />
-              </div>
-            </section>
-          )}
-        </div>
-
-        {/* Sidebar Log & Party */}
-        <aside className="lg:col-span-1 space-y-6">
-          {/* Party Dashboard */}
-          <div className="panel flex flex-col overflow-hidden">
-            <h2 className="text-sm font-black text-white mb-6 uppercase tracking-[0.2em] flex items-center gap-2">
-              <Users className="w-4 h-4 text-blue-400" />
-              Companheiros
-            </h2>
-            
-            <div className="space-y-3 max-h-64 overflow-y-auto pr-2 custom-scrollbar">
-              {partyCharacters.filter(c => c.id !== character.id).map(comp => {
-                const ic = getClassIcon(comp.class_subclass);
-                const hpPerc = (comp.hp_current / comp.hp_max) * 100;
+            <div className="flex gap-4 overflow-x-auto pb-2 custom-scrollbar">
+              {combatOrder.map((item, idx) => {
+                const isCurrent = item.isTurn;
+                const isMyTurn = item.charId === character?.id && isCurrent;
                 
                 return (
-                  <button 
-                    key={comp.id}
-                    onClick={() => setSelectedCompanion(comp)}
-                    className="w-full bg-[#0c1527] border border-[#2a4387]/30 hover:border-blue-500/50 rounded-xl p-3 px-4 flex items-center gap-4 transition-all group"
+                  <div 
+                    key={idx} 
+                    className={`min-w-[120px] p-3 rounded-xl border transition-all ${isCurrent ? 'bg-blue-600/20 border-blue-500 ring-2 ring-blue-500/30' : 'bg-slate-900/50 border-slate-700/50'}`}
                   >
-                    <div className="w-10 h-10 rounded-lg flex items-center justify-center text-xl shrink-0"
-                         style={{ backgroundColor: ic.color + '15', border: `1px solid ${ic.color}33` }}>
-                      {ic.emoji}
+                    <div className="flex justify-between items-center mb-1">
+                      <span className={`text-[10px] font-black ${isCurrent ? 'text-blue-300' : 'text-slate-500'}`}>#{idx + 1}</span>
+                      <span className="text-[10px] font-bold text-white bg-slate-800 px-1 rounded">{item.initiative}</span>
                     </div>
-                    <div className="flex-1 min-w-0 text-left">
-                      <div className="flex justify-between items-center mb-1">
-                        <span className="font-bold text-white text-sm truncate group-hover:text-blue-400 transition-colors">{comp.name}</span>
-                        <span className="text-[10px] font-black text-slate-500">NV {comp.level}</span>
+                    <p className={`text-sm font-bold truncate ${isCurrent ? 'text-white' : 'text-slate-400'}`}>{item.name}</p>
+                    {isMyTurn && (
+                      <div className="mt-2 text-[9px] font-black text-blue-400 animate-pulse uppercase tracking-widest text-center italic">Seu Turno!</div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Dynamic View Content */}
+        {viewMode === 'theater' && (
+          <TheaterView 
+            backgroundUrl={backgroundUrl} 
+            diceLogs={diceLogs} 
+            partyCharacters={partyCharacters}
+            currentCharacter={character}
+          />
+        )}
+
+        {viewMode === 'map' && (
+          <BattleMap 
+            partyCharacters={partyCharacters} 
+            channel={channel} 
+            isAdmin={false}
+            backgroundUrl={backgroundUrl}
+            onBack={() => setViewMode('standard')}
+          />
+        )}
+
+        {viewMode === 'standard' && (
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+            <main className="lg:col-span-3 space-y-6">
+              {/* Health Section */}
+              <section className="panel">
+                <div className="flex justify-between items-end mb-4">
+                  <div className="flex items-center gap-3">
+                    <Heart className="text-rose-500 w-5 h-5" />
+                    <h2 className="text-lg font-bold text-white">Pontos de Vida</h2>
+                  </div>
+                  <p className="text-2xl font-bold text-white">
+                    {character.hp_current} <span className="text-slate-400 text-xl font-normal">/ {character.hp_max}</span>
+                  </p>
+                </div>
+
+                <div className="w-full h-3 bg-[#0c1527] rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-blue-500 transition-all duration-300"
+                    style={{ width: `${(character.hp_current / character.hp_max) * 100}%` }}
+                  ></div>
+                </div>
+              </section>
+
+              {/* Dice Tray */}
+              <section className="panel bg-[#0c1527]/40 border-blue-500/20">
+                <h2 className="text-xs font-black text-blue-400 uppercase tracking-[0.2em] mb-4 flex items-center gap-2">
+                  <Dice5 className="w-4 h-4" /> Bandeja de Dados (Danos e Testes)
+                </h2>
+                <div className="flex flex-wrap gap-3">
+                  {[
+                    { label: 'd4', size: 4, desc: 'Danos pequenos (Adagas, Clavas) e feitiços como Bênção.' },
+                    { label: 'd6', size: 6, desc: 'Armas comuns (Espadas Curtas, Arcos) e a clássica Bola de Fogo.' },
+                    { label: 'd8', size: 8, desc: 'Armas marciais (Espadas Longas, Rapiárias) e Curar Ferimentos.' },
+                    { label: 'd10', size: 10, desc: 'Armas pesadas ou habilidades de classe como Rajada Mística.' },
+                    { label: 'd12', size: 12, desc: 'Machados de Batalha enormes e a Fúria do Bárbaro.' },
+                    { label: 'd20', size: 20, desc: 'O dado principal! Usado para Ataques, Testes e Resistências.' },
+                    { label: 'd100', size: 100, desc: 'Usado para tabelas de sorte raras e Intervenção Divina.' },
+                  ].map((die) => (
+                    <button
+                      key={die.label}
+                      onClick={() => handleDiceRoll(die.label, die.size)}
+                      className="flex-1 min-w-[80px] group relative bg-[#15234b] border border-[#2a4387]/50 rounded-xl p-3 hover:border-blue-500 hover:bg-blue-600/20 transition-all active:scale-95"
+                    >
+                      <span className="text-lg font-black text-white group-hover:text-blue-200">{die.label}</span>
+                      {/* Tooltip */}
+                      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 w-48 p-2 bg-slate-900 border border-slate-700 rounded-lg text-[10px] text-slate-300 font-bold opacity-0 group-hover:opacity-100 transition-opacity z-50 pointer-events-none shadow-2xl">
+                        {die.desc}
                       </div>
-                      <div className="w-full h-1.5 bg-slate-900 rounded-full overflow-hidden">
-                        <div className="h-full bg-gradient-to-r from-rose-600 to-red-500" style={{ width: `${hpPerc}%` }}></div>
+                    </button>
+                  ))}
+                </div>
+              </section>
+
+              {/* Attributes Grid */}
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                {[
+                  { label: 'FORÇA', val: character.strength, desc: 'Poder físico, atletismo e dano corpo-a-corpo.' },
+                  { label: 'DESTREZA', val: character.dexterity, desc: 'Agilidade, reflexos, equilíbrio e precisão.' },
+                  { label: 'CONSTITUIÇÃO', val: character.constitution, desc: 'Saúde, vigor e resistência vital.' },
+                  { label: 'INTELIGÊNCIA', val: character.intelligence, desc: 'Raciocínio lógico, memória e saber arcano.' },
+                  { label: 'SABEDORIA', val: character.wisdom, desc: 'Percepção, intuição e conexão com o mundo.' },
+                  { label: 'CARISMA', val: character.charisma, desc: 'Personalidade, persuasão e liderança.' },
+                ].map((attr) => (
+                  <button
+                    key={attr.label}
+                    onClick={() => handleRoll(attr.label, attr.val)}
+                    className="panel hover:bg-[#1e3470] cursor-pointer flex flex-col items-center justify-center py-6 px-4 transition-all group relative overflow-visible"
+                  >
+                    <div className="flex items-center gap-1 mb-2">
+                      <span className="text-xs font-bold text-slate-400 group-hover:text-blue-300 transition-colors">{attr.label}</span>
+                      <HelpCircle className="w-3 h-3 text-slate-600 opacity-50" />
+                    </div>
+                    <span className="text-3xl font-bold text-white mb-2">{attr.val}</span>
+                    <div className="text-sm font-medium text-blue-300">
+                      ({calculateModifier(attr.val) >= 0 ? '+' : ''}{calculateModifier(attr.val)})
+                    </div>
+                    
+                    {/* Tooltip */}
+                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-56 p-3 bg-slate-900 border border-slate-700 rounded-xl text-xs text-slate-400 font-medium opacity-0 group-hover:opacity-100 transition-opacity z-50 pointer-events-none shadow-2xl text-center">
+                      <p className="mb-2 text-white font-bold">{attr.desc}</p>
+                      <div className="pt-2 border-t border-slate-700/50 text-[10px] italic">
+                        Cálculo: (Valor - 10) / 2 <br/>
+                        Ex: 16 vira +3, 8 vira -1.
                       </div>
                     </div>
                   </button>
-                );
-              })}
-              {partyCharacters.filter(c => c.id !== character.id).length === 0 && (
-                <p className="text-xs text-slate-500 text-center py-4 italic">Sozinho na taverna por enquanto...</p>
-              )}
-            </div>
-          </div>
+                ))}
+              </div>
 
-          <div className="panel h-full min-h-[400px] flex flex-col">
-            <h2 className="text-sm font-black text-white mb-6 uppercase tracking-[0.2em]">
-              Log da Mesa
-            </h2>
-
-            <div className="flex-1 overflow-y-auto space-y-3">
-              {diceLogs.map((log, index) => (
-                <div key={index} className="flex justify-between items-center text-sm mb-2 pb-2 border-b border-[#2a4387]/30">
-                  <div>
-                    <span className="font-medium text-blue-200 block">{log.player}</span>
-                    <span className="text-slate-400 text-xs">d20 {log.modifier >= 0 ? '+' : ''}{log.modifier}</span>
-                  </div>
-                  <span className={`text-xl font-bold ${log.naturalRoll === 20 ? 'text-blue-400' : 'text-white'}`}>
-                    {log.total}
-                  </span>
+              {/* Inventory / Backpack */}
+              <section className="panel">
+                <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+                  <Package className="w-5 h-5 text-amber-500" />
+                  Sua Mochila
+                </h2>
+                <div className="bg-[#0c1527] rounded-xl border border-[#2a4387]/50 p-4 min-h-[120px]">
+                  {character.inventory && character.inventory.length > 0 ? (
+                    <ul className="space-y-3">
+                      {character.inventory.map(item => (
+                        <li key={item.id} className="flex justify-between items-center border-b border-[#2a4387]/30 pb-2 last:border-0 last:pb-0">
+                          <div>
+                            <span className="font-bold text-blue-300">{item.name} <span className="text-slate-500 text-xs ml-1">x{item.quantity}</span></span>
+                            {item.description && <p className="text-xs text-slate-400 mt-1">{item.description}</p>}
+                          </div>
+                          <span className="text-xs font-bold px-2 py-1 bg-blue-900/40 text-blue-400 rounded border border-blue-500/20 capitalize">{item.type}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <div className="flex flex-col items-center justify-center text-slate-500 py-6">
+                      <Package className="w-8 h-8 opacity-30 mb-2" />
+                      <span className="text-sm font-medium">Sua mochila está vazia...</span>
+                    </div>
+                  )}
                 </div>
-              ))}
-              {diceLogs.length === 0 && (
-                <p className="text-sm text-slate-400">Nenhuma rolagem ainda...</p>
+              </section>
+
+              {/* Skill Tree */}
+              {currentCharClassData && (
+                <section className="panel overflow-hidden relative group">
+                  <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+                    <div>
+                      <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                        <Star className="w-5 h-5 text-blue-400" />
+                        Suas Habilidades de {currentCharClassData.name}
+                      </h2>
+                      <p className="text-sm text-slate-400 mt-1 max-w-xl">
+                        Esta é a sua progressão de classe. Conforme você sobe de nível, desbloqueia novas capacidades marciais e mágicas únicas.
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-900/30 border border-blue-500/20 rounded-lg">
+                      <Info className="w-4 h-4 text-blue-400" />
+                      <span className="text-xs font-bold text-blue-300">Nível {character.level}</span>
+                    </div>
+                  </div>
+                  <div className="bg-[#0c1527]/50 rounded-2xl border border-[#2a4387]/30">
+                    <SkillTree 
+                      abilities={currentCharClassData.abilities} 
+                      color={currentCharClassData.color} 
+                    />
+                  </div>
+                </section>
               )}
-            </div>
+            </main>
+
+            <aside className="space-y-6">
+              {/* Party Dashboard */}
+              <div className="panel flex flex-col overflow-hidden">
+                <h2 className="text-sm font-black text-white mb-6 uppercase tracking-[0.2em] flex items-center gap-2">
+                  <Users className="w-4 h-4 text-blue-400" />
+                  Companheiros
+                </h2>
+                
+                <div className="space-y-3 max-h-64 overflow-y-auto pr-2 custom-scrollbar">
+                  {partyCharacters.filter((c: Character) => c.id !== character.id).map((comp: Character) => {
+                    const ic = getClassIcon(comp.class_subclass);
+                    const hpPerc = (comp.hp_current / comp.hp_max) * 100;
+                    
+                    return (
+                      <button 
+                        key={comp.id}
+                        onClick={() => setSelectedCompanion(comp)}
+                        className="w-full bg-[#0c1527] border border-[#2a4387]/30 hover:border-blue-500/50 rounded-xl p-3 px-4 flex items-center gap-4 transition-all group"
+                      >
+                        <div className="w-10 h-10 rounded-lg flex items-center justify-center text-xl shrink-0"
+                             style={{ backgroundColor: ic.color + '15', border: `1px solid ${ic.color}33` }}>
+                          {ic.emoji}
+                        </div>
+                        <div className="flex-1 min-w-0 text-left">
+                          <div className="flex justify-between items-center mb-1">
+                            <span className="font-bold text-white text-sm truncate group-hover:text-blue-400 transition-colors">{comp.name}</span>
+                            <span className="text-[10px] font-black text-slate-500">NV {comp.level}</span>
+                          </div>
+                          <div className="w-full h-1.5 bg-slate-900 rounded-full overflow-hidden">
+                            <div className="h-full bg-gradient-to-r from-rose-600 to-red-500" style={{ width: `${hpPerc}%` }}></div>
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  })}
+                  {partyCharacters.filter((c: Character) => c.id !== character.id).length === 0 && (
+                    <p className="text-xs text-slate-500 text-center py-4 italic">Sozinho na taverna por enquanto...</p>
+                  )}
+                </div>
+              </div>
+
+              {/* mesa log */}
+              <div className="panel h-full min-h-[400px] flex flex-col">
+                <h2 className="text-sm font-black text-white mb-6 uppercase tracking-[0.2em]">
+                  Log da Mesa
+                </h2>
+
+                <div className="flex-1 overflow-y-auto space-y-3">
+                  {diceLogs.map((log: DiceEvent, index: number) => (
+                    <div key={index} className="flex justify-between items-center text-sm mb-2 pb-2 border-b border-[#2a4387]/30">
+                      <div>
+                        <span className="font-medium text-blue-200 block">{log.player}</span>
+                        <span className="text-slate-400 text-xs">d20 {log.modifier >= 0 ? '+' : ''}{log.modifier}</span>
+                      </div>
+                      <span className={`text-xl font-bold ${log.naturalRoll === 20 ? 'text-blue-400' : 'text-white'}`}>
+                        {log.total}
+                      </span>
+                    </div>
+                  ))}
+                  {diceLogs.length === 0 && (
+                    <p className="text-sm text-slate-400">Nenhuma rolagem ainda...</p>
+                  )}
+                </div>
+              </div>
+            </aside>
           </div>
-        </aside>
+        )}
       </div>
       {showCompendium && <ClassCompendium onClose={() => setShowCompendium(false)} />}
       {selectedCompanion && (
