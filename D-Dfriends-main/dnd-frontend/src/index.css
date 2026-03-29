@@ -1,0 +1,127 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    background-color: #0c1527; /* Deep blue background from screenshot */
+    color: #e2e8f0;
+    font-family: 'Inter', sans-serif;
+  }
+}
+
+@layer components {
+  /* Simple, original panel style */
+  .panel {
+    @apply bg-[#15234b]/40 border border-[#2a4387]/30 rounded-2xl p-6;
+  }
+
+  .interactive-btn {
+    @apply bg-[#1e3470]/50 border border-[#2a4387]/50 rounded-xl transition-colors hover:bg-[#2a4387];
+  }
+
+  .perspective-1000 {
+    perspective: 1000px;
+  }
+  
+  .preserve-3d {
+    transform-style: preserve-3d;
+  }
+
+  .glassmorphism {
+    @apply bg-white/10 backdrop-blur-md border border-white/20 shadow-xl;
+  }
+
+  .glassmorphism-dark {
+    @apply bg-slate-900/60 backdrop-blur-lg border border-slate-700/50 shadow-2xl;
+  }
+
+  .animate-fade-in {
+    animation: fadeIn 0.3s ease-out forwards;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* --- Class Themes --- */
+
+  /* Martial (Warrior, Barbarian) */
+  .theme-martial {
+    --theme-primary: #ef4444;
+    --theme-glow: 0 0 30px rgba(239, 68, 68, 0.15);
+    background-image: radial-gradient(circle at 20% 20%, rgba(239, 68, 68, 0.05) 0%, transparent 50%);
+  }
+  .theme-martial .panel { border-color: rgba(239, 68, 68, 0.2); }
+
+  /* Arcane (Mage, Sorcerer, Warlock) */
+  .theme-arcane {
+    --theme-primary: #3b82f6;
+    --theme-glow: 0 0 40px rgba(59, 130, 246, 0.2);
+    background-image: 
+      radial-gradient(circle at 80% 20%, rgba(59, 130, 246, 0.1) 0%, transparent 40%),
+      url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M30 0l15 30-15 30-15-30z' fill='%233b82f6' fill-opacity='0.03'/%3E%3C/svg%3E");
+  }
+  .theme-arcane .panel { 
+    border-color: rgba(59, 130, 246, 0.3);
+    box-shadow: inset 0 0 20px rgba(59, 130, 246, 0.05);
+  }
+
+  /* Nature (Druid, Ranger) */
+  .theme-nature {
+    --theme-primary: #10b981;
+    --theme-glow: 0 0 30px rgba(16, 185, 129, 0.15);
+    background-image: 
+      radial-gradient(circle at 50% 100%, rgba(16, 185, 129, 0.1) 0%, transparent 50%),
+      url("data:image/svg+xml,%3Csvg width='40' height='40' viewBox='0 0 40 40' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M20 5c-5 0-10 5-10 10s5 10 10 10 10-5 10-10-5-10-10-10z' fill='%2310b981' fill-opacity='0.03'/%3E%3C/svg%3E");
+  }
+  .theme-nature .panel { border-color: rgba(16, 185, 129, 0.2); }
+
+  /* Divine (Cleric, Paladin) */
+  .theme-divine {
+    --theme-primary: #fbbf24;
+    --theme-glow: 0 0 50px rgba(251, 191, 36, 0.2);
+    background-image: radial-gradient(circle at 50% 0%, rgba(251, 191, 36, 0.15) 0%, transparent 60%);
+  }
+  .theme-divine .panel { border-color: rgba(251, 191, 36, 0.3); }
+
+  /* Stealth (Rogue) */
+  .theme-stealth {
+    --theme-primary: #6366f1;
+    --theme-glow: 0 0 30px rgba(99, 102, 241, 0.1);
+    background-image: linear-gradient(135deg, rgba(15, 23, 42, 0.9) 0%, rgba(30, 41, 59, 0.8) 100%);
+  }
+  .theme-stealth .panel { border-color: rgba(99, 102, 241, 0.15); }
+}
+
+/* --- Scrollbar Customization --- */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 8px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 10px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+/* Firefox */
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.1) transparent;
+}
