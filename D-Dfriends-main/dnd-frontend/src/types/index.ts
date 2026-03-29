@@ -21,6 +21,7 @@ export interface Character {
   id: number;
   name: string;
   image_url?: string;
+  icon?: string; // Emoji icon for the character
   race: string;
   class_subclass: string;
   level: number;
@@ -32,6 +33,7 @@ export interface Character {
   charisma: number;
   hp_current: number;
   hp_max: number;
+  ac: number;
   user_id: string;
   room_id?: string; // Link to the table/room
   inventory: InventoryItem[];

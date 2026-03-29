@@ -38,6 +38,19 @@
     @apply bg-slate-900/60 backdrop-blur-lg border border-slate-700/50 shadow-2xl;
   }
 
+  .animate-ken-burns {
+    animation: ken-burns 20s ease-in-out infinite alternate;
+  }
+
+  @keyframes spin-slow {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+
+  .animate-spin-slow {
+    animation: spin-slow 8s linear infinite;
+  }
+
   .animate-fade-in {
     animation: fadeIn 0.3s ease-out forwards;
   }
@@ -97,31 +110,84 @@
   .theme-stealth .panel { border-color: rgba(99, 102, 241, 0.15); }
 }
 
-/* --- Scrollbar Customization --- */
-.custom-scrollbar::-webkit-scrollbar {
-  width: 8px;
+/* --- Premium Animations & Effects --- */
+@keyframes drift {
+  0% { transform: translateX(-10%) translateY(-5%) scale(1); opacity: 0.3; }
+  50% { transform: translateX(10%) translateY(5%) scale(1.1); opacity: 0.5; }
+  100% { transform: translateX(-10%) translateY(-5%) scale(1); opacity: 0.3; }
 }
 
-.custom-scrollbar::-webkit-scrollbar-track {
-  background: rgba(0, 0, 0, 0.05);
+@keyframes float-particle {
+  0% { transform: translateY(0) translateX(0); opacity: 0; }
+  20% { opacity: 0.6; }
+  80% { opacity: 0.6; }
+  100% { transform: translateY(-100vh) translateX(20px); opacity: 0; }
+}
+
+.mist-overlay {
+  position: fixed;
+  inset: -50%;
+  width: 200%;
+  height: 200%;
+  background: radial-gradient(circle at center, transparent 0%, rgba(12, 21, 39, 0.4) 100%),
+              url("https://www.transparenttextures.com/patterns/carbon-fibre.png"); /* Subtle texture */
+  filter: blur(80px);
+  opacity: 0.4;
+  pointer-events: none;
+  z-index: 1;
+  animation: drift 30s ease-in-out infinite;
+}
+
+.particles-container {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 2;
+  overflow: hidden;
+}
+
+.particle {
+  position: absolute;
+  bottom: -10px;
+  width: 2px;
+  height: 2px;
+  background: white;
+  border-radius: 50%;
+  box-shadow: 0 0 10px white;
+  animation: float-particle var(--duration) linear infinite;
+  opacity: 0;
+}
+
+/* --- Runic Stylization --- */
+.runic-glow {
+  text-shadow: 0 0 10px currentColor, 0 0 20px currentColor;
+}
+
+.glass-runic {
+  @apply bg-[#15234b]/60 backdrop-blur-2xl border border-white/10 shadow-2xl;
+  box-shadow: 0 0 40px rgba(0, 0, 0, 0.5), inset 0 0 20px rgba(255, 255, 255, 0.02);
+}
+
+.metallic-gold {
+  background: linear-gradient(135deg, #f59e0b 0%, #fbbf24 50%, #f59e0b 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
+}
+
+.custom-scrollbar-thin::-webkit-scrollbar {
+  width: 4px;
+}
+
+.custom-scrollbar-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar-thin::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.05);
   border-radius: 10px;
 }
 
-.custom-scrollbar::-webkit-scrollbar-thumb {
+.custom-scrollbar-thin::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.1);
-  border-radius: 10px;
-  border: 2px solid transparent;
-  background-clip: content-box;
-}
-
-.custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.2);
-  border: 2px solid transparent;
-  background-clip: content-box;
-}
-
-/* Firefox */
-.custom-scrollbar {
-  scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.1) transparent;
 }

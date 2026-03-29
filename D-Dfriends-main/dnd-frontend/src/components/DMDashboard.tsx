@@ -193,344 +193,561 @@ export default function DMDashboard({ onLogout, channel, viewMode, backgroundUrl
   }
 
   return (
-    <div className="container mx-auto p-4 lg:p-8 min-h-screen">
-      <header className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6 mb-12 border-b border-[#2a4387]/50 pb-6">
-        <div>
-          <h1 className="text-4xl font-black text-white flex items-center gap-3 mb-2">
-            <Shield className="text-blue-500 w-10 h-10" /> Painel do Mestre
-          </h1>
-          <div className="flex gap-4 mt-6">
-            {[
-              { id: 'characters', label: 'Jogadores', icon: Users },
-              { id: 'combat', label: 'Combate', icon: Swords },
-              { id: 'rules', label: 'Regras', icon: HelpCircle },
-              { id: 'sounds', label: 'Ambiente', icon: Volume2 },
-              { id: 'scenes', label: 'Cenário', icon: Sparkles }
-            ].map(tab => (
-              <button key={tab.id} onClick={() => setActiveTab(tab.id as any)} className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-sm transition-all ${activeTab === tab.id ? 'bg-blue-600 text-white shadow-lg' : 'bg-[#0c1527] text-slate-400 border border-[#2a4387]/30'}`}>
-                <tab.icon className="w-4 h-4" /> {tab.label}
-              </button>
-            ))}
-            <button onClick={handleCreateNPC} className="flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-sm bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 hover:bg-indigo-600/50 transition-all">
-              <Plus className="w-4 h-4" /> Gerar NPC
-            </button>
+    <div className="min-h-screen bg-[#0c1527] text-slate-200 relative overflow-hidden font-sans pb-20">
+      {/* Premium Atmospheric Effects */}
+      <div className="mist-overlay"></div>
+      <div className="particles-container">
+        {[...Array(15)].map((_, i) => (
+          <div 
+            key={i} 
+            className="particle" 
+            style={{ 
+              left: `${Math.random() * 100}%`, 
+              '--duration': `${15 + Math.random() * 25}s`,
+              animationDelay: `${Math.random() * 10}s`
+            } as any}
+          ></div>
+        ))}
+      </div>
+
+      {/* Background Decor */}
+      <div className="fixed inset-0 pointer-events-none opacity-40">
+        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-blue-600/10 rounded-full blur-[120px]"></div>
+        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-indigo-600/10 rounded-full blur-[120px]"></div>
+      </div>
+
+      <div className="container mx-auto p-4 lg:p-8 max-w-[1800px] relative z-10 animate-in fade-in duration-1000">
+        {/* Floating Premium DM Header */}
+        <header className="bg-[#15234b]/60 backdrop-blur-2xl border border-white/10 rounded-[2.5rem] p-6 mb-10 shadow-2xl flex flex-col lg:flex-row justify-between items-center gap-8 group transition-all hover:border-white/20">
+          <div className="flex items-center gap-8 w-full lg:w-auto">
+            <div className="relative">
+              <div className="absolute -inset-2 bg-gradient-to-tr from-blue-600 to-indigo-600 rounded-[2.5rem] blur opacity-20 group-hover:opacity-40 transition duration-1000"></div>
+              <div className="relative w-24 h-24 rounded-[2rem] bg-[#0c1527]/80 flex items-center justify-center border border-white/10 shadow-inner p-3 overflow-hidden">
+                <img src="/logo.png" alt="Logo" className="w-full h-full object-contain drop-shadow-[0_0_10px_rgba(59,130,246,0.5)]" />
+                <div className="absolute bottom-0 right-0 bg-amber-500 text-[10px] font-black px-2 py-1 rounded-tl-xl border-t border-l border-white/20 shadow-lg text-black">
+                  MESTRE
+                </div>
+              </div>
+            </div>
+            
+            <div className="space-y-2">
+              <div className="flex items-center gap-4">
+                <h1 className="text-4xl font-black text-white italic tracking-tighter uppercase leading-none drop-shadow-md">
+                  Mestre do Calabouço
+                </h1>
+                <span className="px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/30 text-[9px] font-black text-blue-400 uppercase tracking-widest flex items-center gap-1.5 shadow-[0_0_15px_rgba(59,130,246,0.2)]">
+                  Sistema Ativo
+                </span>
+              </div>
+              
+              <div className="flex flex-wrap items-center gap-4 text-slate-400 text-[11px] font-bold uppercase tracking-[0.2em]">
+                <span className="flex items-center gap-2"><span className="text-amber-500 text-lg">✦</span> Dashboard de Controle Global</span>
+              </div>
+            </div>
           </div>
-        </div>
-        <div className="flex items-center gap-4">
-          <button onClick={() => setShowCompendium(true)} className="flex items-center gap-2 px-6 py-3 interactive-btn text-amber-300 border-amber-500/30 text-sm font-bold shadow-lg">
-            <BookOpen className="w-5 h-5" /> Compêndio
-          </button>
-          <button onClick={onLogout} className="flex items-center gap-2 px-6 py-3 interactive-btn text-red-300 border-red-500/30 text-sm font-bold shadow-lg">
-            <LogOut className="w-5 h-5" /> Sair
-          </button>
-        </div>
-      </header>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2 space-y-6">
-          {viewMode === 'map' ? (
-            <div className="col-span-full">
-              <BattleMap 
-                partyCharacters={characters} 
-                channel={channel!} 
-                isAdmin={true} 
-                backgroundUrl={backgroundUrl}
-                onBack={() => setViewMode('standard')}
-              />
-            </div>
-          ) : (
-            <>
-              {activeTab === 'characters' && (
-            <>
-              {/* Party Composition Summary */}
-              <div className="flex flex-wrap gap-2 mb-4 bg-[#0c1527]/40 p-4 rounded-xl border border-[#2a4387]/30">
-                <div className="w-full mb-2"><span className="text-[10px] font-black text-blue-400 uppercase tracking-widest">Composição do Grupo</span></div>
-                {Object.entries(
-                  characters.reduce((acc, char) => {
-                    const cls = char.class_subclass.split(' ')[0];
-                    acc[cls] = (acc[cls] || 0) + 1;
-                    return acc;
-                  }, {} as Record<string, number>)
-                ).map(([cls, count]) => (
-                  <div key={cls} className="px-3 py-1 bg-blue-900/30 border border-blue-500/20 rounded-full flex items-center gap-2">
-                    <span className="text-[10px] font-bold text-white uppercase">{cls}</span>
-                    <span className="w-4 h-4 bg-blue-600 rounded-full flex items-center justify-center text-[8px] font-black text-white">{count}</span>
-                  </div>
-                ))}
-                {characters.length === 0 && <span className="text-xs text-slate-500 italic">Nenhum aventureiro ativo...</span>}
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {characters.map(char => (
-                  <div key={char.id} className="panel flex flex-col justify-between h-fit">
-                    <div>
-                      <div className="flex justify-between items-start mb-4">
-                        <div className="flex items-center gap-3">
-                          {(() => { const ic = getClassIcon(char.class_subclass); return <div className="w-10 h-10 rounded-xl flex items-center justify-center text-2xl" style={{ backgroundColor: ic.color + '22', border: `1px solid ${ic.color}55` }}>{ic.emoji}</div>; })()}
-                          <div>
-                            <h3 className="text-lg font-bold text-white leading-tight">{char.name}</h3>
-                            <p className="text-[10px] font-bold text-blue-400 uppercase tracking-tighter">{char.class_subclass}</p>
-                            <p className="text-[9px] text-slate-500 font-medium">Nv {char.level} • XP {char.xp || 0}</p>
-                          </div>
-                        </div>
-                        {char.name.includes('(NPC)') && (
-                          <button onClick={() => deleteCharacter(char.id)} className="text-red-500/30 hover:text-red-500 transition-colors p-1">
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        )}
-                      </div>
-                      <div className="space-y-4">
-                        <div className="bg-[#0c1527] p-2 rounded-xl border border-[#2a4387]/50">
-                          <div className="flex justify-between text-[10px] font-black uppercase mb-1"><span>Vida</span><span className="text-white">{char.hp_current}/{char.hp_max}</span></div>
-                          <div className="w-full h-1.5 bg-slate-900 rounded-full overflow-hidden inline-block group relative">
-                            <div className="h-full bg-red-500 transition-all duration-300" style={{ width: `${(char.hp_current/char.hp_max)*100}%` }}></div>
-                          </div>
-                          <div className="flex gap-1 mt-2">
-                             <button onClick={() => updateHP(char, -1)} className="flex-1 py-1 rounded bg-red-900/30 border border-red-500/20 text-[8px] font-black text-red-400 hover:bg-red-600 hover:text-white transition-all">-1</button>
-                             <button onClick={() => updateHP(char, -5)} className="flex-1 py-1 rounded bg-red-900/30 border border-red-500/20 text-[8px] font-black text-red-400 hover:bg-red-600 hover:text-white transition-all">-5</button>
-                             <button onClick={() => updateHP(char, 1)} className="flex-1 py-1 rounded bg-green-900/30 border border-green-500/20 text-[8px] font-black text-green-400 hover:bg-green-600 hover:text-white transition-all">+1</button>
-                             <button onClick={() => updateHP(char, 5)} className="flex-1 py-1 rounded bg-green-900/30 border border-green-500/20 text-[8px] font-black text-green-400 hover:bg-green-600 hover:text-white transition-all">+5</button>
-                          </div>
-                        </div>
-                        <div className="flex flex-wrap gap-1">
-                          {['Envenenado', 'Atordoado', 'Caído', 'Sangrando'].map(cond => (
-                            <button key={cond} onClick={() => toggleCondition(char, cond)} className={`px-2 py-1 rounded text-[9px] font-black uppercase transition-all ${char.conditions?.includes(cond) ? 'bg-red-600 text-white' : 'bg-slate-800 text-slate-500'}`}>{cond}</button>
-                          ))}
-                        </div>
-                        <div className="flex gap-2">
-                           <button onClick={() => addXP(char, 100)} className="flex-1 py-1 px-2 rounded bg-blue-900/40 border border-blue-500/30 text-[9px] font-black text-blue-300">+100 XP</button>
-                           <button onClick={() => levelUp(char)} className="flex-1 py-1 px-2 rounded bg-amber-900/40 border border-amber-500/30 text-[9px] font-black text-amber-300">Level Up</button>
-                        </div>
-
-                        {/* Attribute Adjustment Grid */}
-                        <div className="grid grid-cols-3 gap-2 mt-4 bg-[#0c1527] p-2 rounded-xl border border-[#2a4387]/30">
-                          {[
-                            { key: 'strength', label: 'FOR' },
-                            { key: 'dexterity', label: 'DES' },
-                            { key: 'constitution', label: 'CON' },
-                            { key: 'intelligence', label: 'INT' },
-                            { key: 'wisdom', label: 'SAB' },
-                            { key: 'charisma', label: 'CAR' }
-                          ].map(attr => (
-                            <div key={attr.key} className="flex flex-col items-center">
-                              <span className="text-[8px] font-black text-slate-500 uppercase">{attr.label}</span>
-                              <div className="flex items-center gap-1.5">
-                                <button onClick={() => updateAttribute(char, attr.key as any, -1)} className="text-red-500 hover:text-red-400 font-bold text-xs">-</button>
-                                <span className="text-white font-bold text-xs">{(char as any)[attr.key]}</span>
-                                <button onClick={() => updateAttribute(char, attr.key as any, 1)} className="text-green-500 hover:text-green-400 font-bold text-xs">+</button>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex gap-2 mt-4">
-                      <button onClick={() => setSelectedChar(char)} className="flex-1 py-2 rounded-lg border border-[#2a4387]/30 text-slate-400 font-bold text-xs"><Plus className="w-3 h-3 inline mr-1" /> Itens</button>
-                      <button onClick={() => addToCombat(char)} className="flex-1 py-2 rounded-lg bg-blue-600 text-white font-bold text-xs"><Swords className="w-3 h-3 inline mr-1" /> Combate</button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </>
-          )}
-
-          {activeTab === 'combat' && (
-            <div className="space-y-4">
-              <div className="flex justify-between items-center"><h2 className="text-xl font-bold text-white flex items-center gap-2"><Swords className="w-5 h-5 text-blue-400" /> Iniciativa</h2><div className="flex gap-2"><button onClick={sortCombat} className="px-3 py-1 bg-blue-600 text-white rounded font-bold text-xs">Ordenar</button><button onClick={clearCombat} className="px-3 py-1 bg-slate-800 text-slate-400 rounded font-bold text-xs">Limpar</button></div></div>
-              <div className="bg-[#0c1527] rounded-xl overflow-hidden border border-[#2a4387]/30">
-                <table className="w-full text-left text-sm">
-                  <thead className="bg-[#15234b]/60 text-slate-400 uppercase text-[10px] font-black"><tr><th className="p-3">#</th><th className="p-3">Nome</th><th className="p-3 text-center">Inic.</th><th className="p-3"></th></tr></thead>
-                  <tbody className="divide-y divide-[#2a4387]/20 text-white">
-                    {combatParticipants.map((p, idx) => (
-                      <tr key={idx} className={p.isTurn ? 'bg-blue-600/10' : ''}><td className="p-3 text-slate-500">{idx+1}</td><td className="p-3 flex items-center gap-2">{p.isTurn && <div className="w-1.5 h-1.5 rounded-full bg-blue-500"></div>}{p.name}</td><td className="p-3 text-center"><input type="number" className="w-12 bg-slate-900 border border-[#2a4387]/30 rounded text-center" value={p.initiative} onChange={e => updateInitiative(idx, parseInt(e.target.value)||0)} /></td><td className="p-3 text-right"><button onClick={() => setCombatParticipants(prev => prev.filter((_, i) => i !== idx))}><Trash2 className="w-3 h-3 text-red-500/50" /></button></td></tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              {combatParticipants.length > 0 && <button onClick={nextTurn} className="w-full py-4 bg-blue-600 text-white rounded-xl font-black flex items-center justify-center gap-2">PRÓXIMO TURNO <ChevronRight className="w-5 h-5" /></button>}
-            </div>
-          )}
-
-          {activeTab === 'sounds' && (
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                {[
-                  { label: 'Espadas', icon: Swords, type: 'sword' },
-                  { label: 'Magia', icon: Sparkles, type: 'magic' },
-                  { label: 'Ouro', icon: Dice5, type: 'coin' },
-                  { label: 'Dragão', icon: Ghost, url: 'https://raw.githubusercontent.com/misode/mcmeta/assets/assets/minecraft/sounds/mob/enderdragon/growl1.ogg' },
-                  { label: 'Geleia', icon: Droplets, url: 'https://raw.githubusercontent.com/misode/mcmeta/assets/assets/minecraft/sounds/mob/slime/big1.ogg' },
-                  { label: 'Ossos', icon: Skull, url: 'https://raw.githubusercontent.com/misode/mcmeta/assets/assets/minecraft/sounds/mob/skeleton/say1.ogg' },
-                  { label: 'Sucesso', icon: CheckCircle, type: 'success' },
-                  { label: 'Erro', icon: Zap, type: 'error' },
-                ].map(s => (
-                  <button key={s.label} onClick={async () => {
-                    const soundUrl = s.url || `synth:${s.type}`;
-                    console.log('[SOUND] Sending sound event:', soundUrl);
-                    const status = await channel?.send({ type: 'broadcast', event: 'sound_event', payload: { url: soundUrl } });
-                    console.log('[SOUND] Broadcast status:', status);
-                  }} className="p-4 rounded-xl border border-[#2a4387]/30 bg-[#0c1527] flex flex-col items-center gap-2 hover:border-blue-500/50 transition-all font-bold text-[10px] text-slate-400 uppercase">
-                    <s.icon className="w-5 h-5 text-blue-400" />
-                    {s.label}
-                  </button>
-                ))}
-            </div>
-          )}
-
-          {activeTab === 'scenes' && (
-            <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-              <section className="panel bg-[#0c1527]/40 border-blue-500/30">
-                <h3 className="text-xl font-black text-white mb-6 flex items-center gap-3">
-                  <Swords className="text-blue-400 w-6 h-6" /> Modo de Visualização
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  {[
-                    { id: 'standard', label: 'Ficha Padrão', desc: 'Foco nos atributos e inventário.', icon: User },
-                    { id: 'theater', label: 'Teatro da Mente', desc: 'Imersão visual com cenário e log.', icon: Sparkles },
-                    { id: 'map', label: 'Mapa de Batalha', desc: 'Combate tático com grid e tokens.', icon: Target }
-                  ].map(mode => (
-                    <button
-                      key={mode.id}
-                      onClick={() => setViewMode(mode.id as any)}
-                      className={`p-6 rounded-2xl border-2 transition-all text-left flex flex-col gap-2 ${viewMode === mode.id ? 'bg-blue-600/20 border-blue-500 shadow-[0_0_20px_rgba(59,130,246,0.2)]' : 'bg-[#0c1527] border-[#2a4387]/30 hover:border-blue-500/50'}`}
-                    >
-                      <mode.icon className={`w-8 h-8 ${viewMode === mode.id ? 'text-blue-400' : 'text-slate-500'}`} />
-                      <span className="font-black text-white uppercase tracking-wider">{mode.label}</span>
-                      <span className="text-xs text-slate-400 font-medium">{mode.desc}</span>
-                    </button>
-                  ))}
-                </div>
-              </section>
-
-              <section className="panel bg-[#0c1527]/40 border-purple-500/30">
-                <h3 className="text-xl font-black text-white mb-6 flex items-center gap-3">
-                  <Sparkles className="text-purple-400 w-6 h-6" /> Cenários Predefinidos
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  {[
-                    { name: 'Taverna Aconchegante', url: '/images/scenes/taverna.png', color: 'bg-amber-900/40 border-amber-500/30' },
-                    { name: 'Porão Sombrio', url: '/images/scenes/porao.png', color: 'bg-slate-900/40 border-slate-500/30' },
-                    { name: 'Tumba Antiga', url: '/images/scenes/tumba.png', color: 'bg-emerald-900/40 border-emerald-500/30' }
-                  ].map(scene => (
-                    <button
-                      key={scene.url}
-                      onClick={() => setBackground(scene.url)}
-                      className={`group relative h-32 rounded-2xl overflow-hidden border-2 transition-all ${backgroundUrl === scene.url ? 'border-white ring-2 ring-purple-500/50' : 'border-transparent'}`}
-                    >
-                      <div 
-                        className="absolute inset-0 bg-cover bg-center transition-transform group-hover:scale-110" 
-                        style={{ backgroundImage: `url(${scene.url})` }}
-                      />
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent flex items-end p-4">
-                        <span className="text-xs font-black text-white uppercase tracking-widest">{scene.name}</span>
-                      </div>
-                      {backgroundUrl === scene.url && (
-                        <div className="absolute top-2 right-2 bg-white text-purple-600 p-1 rounded-full">
-                          <CheckCircle className="w-3 h-3" />
-                        </div>
-                      )}
-                    </button>
-                  ))}
-                </div>
-
-                <div className="mt-8 pt-8 border-t border-[#2a4387]/30">
-                  <h4 className="text-xs font-black text-slate-500 uppercase mb-4 tracking-widest">URL de Cenário Personalizado</h4>
-                  <div className="flex gap-2">
-                    <input 
-                      type="text" 
-                      placeholder="https://exemplo.com/imagem.jpg"
-                      className="flex-1 bg-[#0c1527] border border-[#2a4387]/50 rounded-xl px-4 py-3 text-white text-sm outline-none focus:border-purple-500"
-                      onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
-                        if (e.key === 'Enter') {
-                          setBackground(e.currentTarget.value);
-                          e.currentTarget.value = '';
-                        }
-                      }}
-                    />
-                  </div>
-                </div>
-              </section>
-            </div>
-          )}
-          </>
-          )}
-        </div>
-
-        <div className="space-y-6">
-          {/* DM Dice Tray */}
-          <div className="panel bg-[#0c1527]/60 border-amber-500/30">
-            <h3 className="text-xs font-black text-amber-400 uppercase mb-4 flex items-center gap-2">
-              <Dice5 className="w-4 h-4" /> Dados do Mestre
-            </h3>
-            <div className="flex flex-wrap gap-2">
-              {[4, 6, 8, 10, 12, 20, 100].map(die => (
+          <div className="flex items-center gap-6">
+            {/* Desktop Tab Switcher */}
+            <div className="hidden md:flex bg-black/40 p-1.5 rounded-2xl border border-white/5 shadow-inner">
+              {[
+                { id: 'characters', label: 'GRUPO', icon: Users },
+                { id: 'combat', label: 'COMBATE', icon: Swords },
+                { id: 'rules', label: 'REGRAS', icon: HelpCircle },
+                { id: 'sounds', label: 'ÁUDIO', icon: Volume2 },
+                { id: 'scenes', label: 'CENÁRIO', icon: Sparkles }
+              ].map(tab => (
                 <button
-                  key={die}
-                  onClick={() => handleRoll(`d${die}`, die)}
-                  className="w-10 h-10 bg-amber-900/20 border border-amber-500/30 rounded-lg flex items-center justify-center font-black text-xs text-amber-200 hover:bg-amber-600 hover:text-white transition-all active:scale-95"
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id as any)}
+                  className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-[10px] font-black tracking-[0.2em] transition-all ${activeTab === tab.id ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
                 >
-                  {die === 100 ? '%' : `d${die}`}
+                  <tab.icon className="w-4 h-4" /> {tab.label}
                 </button>
               ))}
             </div>
+
+            <div className="flex items-center gap-3 border-l border-white/5 pl-6">
+              <button
+                onClick={() => setShowCompendium(true)}
+                className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-500 hover:bg-amber-500/20 transition-all hover:scale-110 shadow-lg group"
+                title="Abrir Compêndio"
+              >
+                <BookOpen className="w-5 h-5 group-hover:animate-pulse" />
+              </button>
+              <button
+                onClick={onLogout}
+                className="p-3.5 rounded-2xl bg-red-500/10 border border-red-500/30 text-red-500 hover:bg-red-500/20 transition-all hover:scale-110 shadow-lg"
+                title="Sair"
+              >
+                <LogOut className="w-5 h-5" />
+              </button>
+            </div>
+          </div>
+        </header>
+
+        <div className="flex md:hidden mb-8 bg-[#15234b]/40 backdrop-blur-xl border border-white/10 rounded-2xl p-2 gap-2 overflow-x-auto custom-scrollbar">
+          {[
+            { id: 'characters', icon: Users },
+            { id: 'combat', icon: Swords },
+            { id: 'rules', icon: HelpCircle },
+            { id: 'sounds', icon: Volume2 },
+            { id: 'scenes', icon: Sparkles }
+          ].map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id as any)}
+              className={`p-4 rounded-xl transition-all ${activeTab === tab.id ? 'bg-blue-600 text-white' : 'text-slate-500'}`}
+            >
+              <tab.icon className="w-5 h-5" />
+            </button>
+          ))}
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+          <div className="lg:col-span-3 space-y-8 pb-20">
+            {viewMode === 'map' ? (
+              <div className="col-span-full animate-in zoom-in-95 duration-500">
+                <BattleMap 
+                  partyCharacters={characters} 
+                  channel={channel!} 
+                  isAdmin={true} 
+                  backgroundUrl={backgroundUrl}
+                  onBack={() => setViewMode('standard')}
+                />
+              </div>
+            ) : (
+              <>
+                {activeTab === 'characters' && (
+                  <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+                    {/* Party Insights */}
+                    <div className="bg-[#15234b]/40 backdrop-blur-xl border border-white/10 rounded-[2.5rem] p-8 shadow-xl flex flex-wrap items-center gap-6">
+                      <div className="space-y-1">
+                        <span className="text-[10px] font-black text-blue-400 uppercase tracking-[0.2em] block">Composição do Grupo</span>
+                        <div className="flex -space-x-3">
+                          {characters.map((char, i) => {
+                            const ic = getClassIcon(char.class_subclass);
+                            return (
+                              <div key={i} className="w-10 h-10 rounded-full border-2 border-[#15234b] bg-[#0c1527] flex items-center justify-center text-lg shadow-lg group relative" title={char.name}>
+                                {ic.emoji}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                      <div className="h-12 w-px bg-white/5 hidden md:block"></div>
+                      <div className="flex flex-wrap gap-3">
+                        {Object.entries(
+                          characters.reduce((acc, char) => {
+                            const cls = char.class_subclass.split(' ')[0];
+                            acc[cls] = (acc[cls] || 0) + 1;
+                            return acc;
+                          }, {} as Record<string, number>)
+                        ).map(([cls, count]) => (
+                          <div key={cls} className="px-4 py-1.5 bg-white/5 border border-white/10 rounded-full flex items-center gap-3">
+                            <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">{cls}</span>
+                            <span className="w-5 h-5 bg-blue-600 rounded-full flex items-center justify-center text-[10px] font-black text-white shadow-lg">{count}</span>
+                          </div>
+                        ))}
+                      </div>
+                      <button onClick={handleCreateNPC} className="ml-auto flex items-center gap-2 px-6 py-2.5 bg-indigo-600 text-white rounded-2xl font-black text-[10px] tracking-[0.2em] hover:bg-indigo-500 transition-all shadow-lg active:scale-95">
+                        <Plus className="w-4 h-4" /> NOVO NPC
+                      </button>
+                    </div>
+
+                    {/* Adventurers Grid */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      {characters.map(char => {
+                        const ic = getClassIcon(char.class_subclass);
+                        return (
+                          <div key={char.id} className="bg-[#15234b]/40 backdrop-blur-xl border border-white/10 rounded-[2.5rem] p-8 shadow-xl group hover:border-white/20 transition-all flex flex-col justify-between">
+                            <div>
+                              <div className="flex justify-between items-start mb-6">
+                                <div className="flex items-center gap-4">
+                                  <div className="w-16 h-16 rounded-[1.5rem] flex items-center justify-center text-3xl transition-transform group-hover:scale-110 shadow-lg relative"
+                                       style={{ backgroundColor: ic.color + '20', border: `2px solid ${ic.color}40`, color: ic.color }}>
+                                    {ic.emoji}
+                                    <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-blue-600 rounded-lg flex items-center justify-center text-[10px] font-black text-white border border-white/20 shadow-lg">
+                                      {char.level}
+                                    </div>
+                                  </div>
+                                  <div>
+                                    <h3 className="text-xl font-black text-white italic tracking-tight uppercase">{char.name}</h3>
+                                    <div className="flex items-center gap-2 mt-1">
+                                      <span className="text-[9px] font-black text-blue-400 uppercase tracking-widest">{char.class_subclass}</span>
+                                      <span className="text-[8px] font-bold text-slate-500 uppercase tracking-widest">• {char.race}</span>
+                                    </div>
+                                  </div>
+                                </div>
+                                {char.name.includes('(NPC)') && (
+                                  <button onClick={() => deleteCharacter(char.id)} className="p-2 rounded-xl bg-red-500/10 border border-red-500/30 text-red-500 hover:bg-red-500/20 transition-all">
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
+                                )}
+                              </div>
+
+                              <div className="space-y-6">
+                                {/* HP Bar Section */}
+                                <div className="space-y-2">
+                                  <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-[0.2em]">
+                                    <span className="text-red-400">Vitalidade</span>
+                                    <span className="text-white">{char.hp_current} / {char.hp_max} PV</span>
+                                  </div>
+                                  <div className="h-3 bg-black/40 rounded-full overflow-hidden border border-white/5 shadow-inner">
+                                    <div 
+                                      className="h-full bg-gradient-to-r from-red-600 to-orange-400 transition-all duration-500 shadow-[0_0_10px_rgba(239,68,68,0.3)]"
+                                      style={{ width: `${(char.hp_current/char.hp_max)*100}%` }}
+                                    ></div>
+                                  </div>
+                                  <div className="flex gap-2">
+                                    {[-5, -1, 1, 5].map(v => (
+                                      <button 
+                                        key={v}
+                                        onClick={() => updateHP(char, v)}
+                                        className={`flex-1 py-1.5 rounded-xl border font-black text-[10px] transition-all ${v < 0 ? 'bg-red-500/10 border-red-500/20 text-red-400 hover:bg-red-500/20' : 'bg-green-500/10 border-green-500/20 text-green-400 hover:bg-green-500/20'}`}
+                                      >
+                                        {v > 0 ? '+' : ''}{v}
+                                      </button>
+                                    ))}
+                                  </div>
+                                </div>
+
+                                {/* Quick Stats Grid */}
+                                <div className="grid grid-cols-2 gap-4">
+                                  <div className="bg-black/30 p-3 rounded-2xl border border-white/5">
+                                    <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest block mb-1">XP Atual</span>
+                                    <div className="flex justify-between items-center">
+                                      <span className="text-sm font-black text-amber-500 italic">{char.xp || 0}</span>
+                                      <button onClick={() => addXP(char, 100)} className="text-[8px] font-black text-blue-400 hover:text-white uppercase">+100</button>
+                                    </div>
+                                  </div>
+                                  <div className="bg-black/30 p-3 rounded-2xl border border-white/5 flex flex-col justify-center items-center">
+                                    <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest block mb-1 text-center">Defesa (CA)</span>
+                                    <span className="text-lg font-black text-white italic">{(char as any).ac || 10}</span>
+                                  </div>
+                                </div>
+
+                                {/* Conditions */}
+                                <div className="flex flex-wrap gap-2">
+                                  {['Caído', 'Cego', 'Preso', 'Lento'].map(cond => {
+                                    const isActive = char.conditions?.includes(cond);
+                                    return (
+                                      <button
+                                        key={cond}
+                                        onClick={() => toggleCondition(char, cond)}
+                                        className={`px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest border transition-all ${isActive ? 'bg-amber-500 border-amber-400 text-black shadow-lg shadow-amber-500/20' : 'bg-white/5 border-white/10 text-slate-500 hover:text-slate-300'}`}
+                                      >
+                                        {cond}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="flex gap-3 mt-8">
+                              <button onClick={() => setSelectedChar(char)} className="flex-1 py-3 rounded-2xl bg-white/5 border border-white/10 text-slate-400 font-black text-[10px] tracking-widest hover:bg-white/10 hover:text-white transition-all uppercase">
+                                <PackagePlus className="w-3.5 h-3.5 inline mr-2" /> Inventário
+                              </button>
+                              <button onClick={() => addToCombat(char)} className="flex-1 py-3 rounded-2xl bg-blue-600 text-white font-black text-[10px] tracking-widest hover:bg-blue-500 transition-all shadow-lg uppercase">
+                                <Swords className="w-3.5 h-3.5 inline mr-2" /> Combate
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {activeTab === 'combat' && (
+                  <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+                    <section className="bg-[#15234b]/40 backdrop-blur-xl border border-blue-500/30 rounded-[2.5rem] p-8 shadow-xl">
+                      <div className="flex justify-between items-center mb-8">
+                        <div>
+                          <h2 className="text-2xl font-black text-white italic tracking-tight uppercase flex items-center gap-3">
+                            <Swords className="w-6 h-6 text-blue-400" /> Registro de Iniciativa
+                          </h2>
+                          <p className="text-xs text-slate-400 font-medium mt-1">Gerencie a ordem dos turnos e efeitos de combate.</p>
+                        </div>
+                        <div className="flex gap-3">
+                          <button onClick={sortCombat} className="px-6 py-2.5 bg-blue-600 text-white rounded-2xl font-black text-[10px] tracking-widest shadow-lg hover:bg-blue-500 transition-all">ORDENAR</button>
+                          <button onClick={clearCombat} className="px-6 py-2.5 bg-red-500/10 border border-red-500/30 text-red-500 rounded-2xl font-black text-[10px] tracking-widest hover:bg-red-500/20 transition-all">LIMPAR</button>
+                        </div>
+                      </div>
+
+                      <div className="bg-black/20 rounded-3xl border border-white/5 overflow-hidden">
+                        <table className="w-full text-left">
+                          <thead>
+                            <tr className="bg-[#15234b]/60 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] border-b border-white/5">
+                              <th className="p-6">Ordem</th>
+                              <th className="p-6">Combatente</th>
+                              <th className="p-6 text-center">Iniciativa</th>
+                              <th className="p-6 text-right">Ações</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-white/5">
+                            {combatParticipants.map((p, idx) => (
+                              <tr key={idx} className={`transition-all ${p.isTurn ? 'bg-blue-600/10' : 'hover:bg-white/5'}`}>
+                                <td className="p-6">
+                                  <span className={`text-sm font-black ${p.isTurn ? 'text-blue-400' : 'text-slate-600'}`}>#{idx + 1}</span>
+                                </td>
+                                <td className="p-6">
+                                  <div className="flex items-center gap-3">
+                                    {p.isTurn && <div className="w-2.5 h-2.5 rounded-full bg-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.5)] animate-pulse"></div>}
+                                    <span className={`text-sm font-black uppercase italic ${p.isTurn ? 'text-white' : 'text-slate-400'}`}>{p.name}</span>
+                                  </div>
+                                </td>
+                                <td className="p-6 text-center">
+                                  <input 
+                                    type="number" 
+                                    className="w-16 bg-black/40 border border-white/10 rounded-xl px-2 py-1.5 text-center text-sm font-black text-white focus:border-blue-500 outline-none transition-all shadow-inner"
+                                    value={p.initiative} 
+                                    onChange={e => updateInitiative(idx, parseInt(e.target.value)||0)} 
+                                  />
+                                </td>
+                                <td className="p-6 text-right">
+                                  <button onClick={() => setCombatParticipants(prev => prev.filter((_, i) => i !== idx))} className="p-2 rounded-xl bg-red-500/10 text-red-500 hover:bg-red-500/20 transition-all">
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                        {combatParticipants.length === 0 && (
+                          <div className="p-20 text-center space-y-4">
+                            <Skull className="w-12 h-12 text-slate-700 mx-auto opacity-20" />
+                            <p className="text-sm text-slate-600 font-black uppercase tracking-widest italic">O campo de batalha está em silêncio...</p>
+                          </div>
+                        )}
+                      </div>
+                      
+                      {combatParticipants.length > 0 && (
+                        <button onClick={nextTurn} className="w-full mt-8 py-5 bg-gradient-to-r from-blue-700 to-blue-600 text-white rounded-[2rem] font-black text-xs tracking-[0.3em] shadow-2xl hover:scale-[1.02] transition-all active:scale-95 flex items-center justify-center gap-4">
+                          PASSAR O TURNO <ChevronRight className="w-5 h-5" />
+                        </button>
+                      )}
+                    </section>
+                  </div>
+                )}
+
+                {activeTab === 'sounds' && (
+                  <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+                    <section className="bg-[#15234b]/40 backdrop-blur-xl border border-white/10 rounded-[2.5rem] p-8 shadow-xl">
+                      <h2 className="text-2xl font-black text-white italic tracking-tight uppercase mb-8 flex items-center gap-3">
+                        <Volume2 className="w-6 h-6 text-indigo-400" /> Mesa de Efeitos Sonoros
+                      </h2>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                        {[
+                          { label: 'Espadas', icon: Swords, type: 'sword', color: 'text-slate-400' },
+                          { label: 'Feitiço', icon: Sparkles, type: 'magic', color: 'text-indigo-400' },
+                          { label: 'Tesouro', icon: Dice5, type: 'coin', color: 'text-amber-400' },
+                          { label: 'Dragão', icon: Ghost, url: 'https://raw.githubusercontent.com/misode/mcmeta/assets/assets/minecraft/sounds/mob/enderdragon/growl1.ogg', color: 'text-red-400' },
+                          { label: 'Geleia', icon: Droplets, url: 'https://raw.githubusercontent.com/misode/mcmeta/assets/assets/minecraft/sounds/mob/slime/big1.ogg', color: 'text-emerald-400' },
+                          { label: 'Cripta', icon: Skull, url: 'https://raw.githubusercontent.com/misode/mcmeta/assets/assets/minecraft/sounds/mob/skeleton/say1.ogg', color: 'text-slate-500' },
+                          { label: 'Sucesso', icon: CheckCircle, type: 'success', color: 'text-green-500' },
+                          { label: 'Falha Critical', icon: Zap, type: 'error', color: 'text-red-600' },
+                        ].map(s => (
+                          <button 
+                            key={s.label} 
+                            onClick={() => {
+                              const soundUrl = s.url || `synth:${s.type}`;
+                              channel?.send({ type: 'broadcast', event: 'sound_event', payload: { url: soundUrl } });
+                            }} 
+                            className="bg-black/20 border border-white/5 rounded-2xl p-6 flex flex-col items-center gap-4 group hover:bg-white/5 hover:border-white/20 transition-all shadow-lg active:scale-95"
+                          >
+                            <div className={`p-4 rounded-xl bg-white/5 transition-transform group-hover:scale-110 ${s.color}`}>
+                              <s.icon className="w-8 h-8" />
+                            </div>
+                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest group-hover:text-white transition-colors">{s.label}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </section>
+                  </div>
+                )}
+
+                {activeTab === 'scenes' && (
+                  <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+                    <section className="bg-[#15234b]/40 backdrop-blur-xl border border-white/10 rounded-[2.5rem] p-8 shadow-xl">
+                      <h2 className="text-2xl font-black text-white italic tracking-tight uppercase mb-8 flex items-center gap-3">
+                        <Sparkles className="w-6 h-6 text-purple-400" /> Direção de Arte e Cenário
+                      </h2>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        {[
+                          { id: 'standard', label: 'Modo Ficha', desc: 'Visualização clássica e focada.', icon: User },
+                          { id: 'theater', label: 'Teatro Virtual', desc: 'Foco total na narrativa visual.', icon: Sparkles },
+                          { id: 'map', label: 'Estratégia Real', desc: 'Batalha tática com grid.', icon: Target }
+                        ].map(mode => (
+                          <button
+                            key={mode.id}
+                            onClick={() => setViewMode(mode.id as any)}
+                            className={`p-8 rounded-[2rem] border-2 transition-all text-left flex flex-col gap-3 group overflow-hidden relative ${viewMode === mode.id ? 'bg-blue-600/10 border-blue-500 shadow-2xl' : 'bg-black/20 border-white/5 hover:border-white/20'}`}
+                          >
+                            <div className={`w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center transition-transform group-hover:scale-110 ${viewMode === mode.id ? 'text-blue-400' : 'text-slate-500'}`}>
+                              <mode.icon className="w-6 h-6" />
+                            </div>
+                            <span className="text-sm font-black text-white uppercase tracking-widest mt-2">{mode.label}</span>
+                            <span className="text-[10px] text-slate-500 font-bold uppercase leading-relaxed">{mode.desc}</span>
+                            {viewMode === mode.id && <div className="absolute top-4 right-4 w-2 h-2 rounded-full bg-blue-500 animate-pulse"></div>}
+                          </button>
+                        ))}
+                      </div>
+
+                      <div className="mt-12 space-y-6">
+                        <h3 className="text-xs font-black text-slate-500 uppercase tracking-[0.2em] border-b border-white/5 pb-4">Biblioteca de Atmosferas</h3>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                          {[
+                            { name: 'Taverna', url: '/images/scenes/taverna.png' },
+                            { name: 'Caverna', url: '/images/scenes/porao.png' },
+                            { name: 'Tumba', url: '/images/scenes/tumba.png' },
+                            { name: 'Floresta', url: '/images/scenes/floresta.png' }
+                          ].map(scene => (
+                            <button
+                              key={scene.url}
+                              onClick={() => setBackground(scene.url)}
+                              className={`group relative h-40 rounded-2xl overflow-hidden border-2 transition-all ${backgroundUrl === scene.url ? 'border-blue-500 shadow-2xl' : 'border-transparent hover:border-white/20'}`}
+                            >
+                              <div className="absolute inset-0 bg-cover bg-center transition-transform group-hover:scale-110" style={{ backgroundImage: `url(${scene.url})` }} />
+                              <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent flex items-end p-4">
+                                <span className="text-[10px] font-black text-white uppercase tracking-widest">{scene.name}</span>
+                              </div>
+                              {backgroundUrl === scene.url && <div className="absolute top-2 right-2 p-1 bg-blue-600 rounded-lg text-white"><CheckCircle className="w-3 h-3" /></div>}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </section>
+                  </div>
+                )}
+                
+                {activeTab === 'rules' && (
+                  <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+                    <section className="bg-[#15234b]/40 backdrop-blur-xl border border-white/10 rounded-[2.5rem] p-8 shadow-xl">
+                       <h2 className="text-2xl font-black text-white italic tracking-tight uppercase mb-8 flex items-center gap-3">
+                        <HelpCircle className="w-6 h-6 text-amber-500" /> Guia Rápido de Dungeon Master
+                      </h2>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                        <div className="space-y-4">
+                          <h3 className="text-xs font-black text-blue-400 uppercase tracking-widest">Dicas de Narração</h3>
+                          <div className="space-y-3">
+                            {['Use os 5 sentidos para descrever cada cena.', 'Mantenha o ritmo - não deixe o silêncio durar demais.', 'Siga a "Regra do Sim, Mas..." para encorajar criatividade.'].map((tip, i) => (
+                              <div key={i} className="bg-white/5 border border-white/5 p-4 rounded-2xl text-xs font-semibold text-slate-400">
+                                <span className="text-blue-500 mr-2">◈</span> {tip}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="space-y-4">
+                          <h3 className="text-xs font-black text-amber-400 uppercase tracking-widest">Mecânicas de Emergência</h3>
+                          <div className="bg-amber-500/10 border border-amber-500/20 p-6 rounded-[2rem] space-y-4">
+                            <p className="text-[11px] font-bold text-amber-200/80 leading-relaxed uppercase">Em caso de dúvida sobre uma regra complexa, decida rapidamente o que faz sentido narrativamente e verifique o manual após a sessão.</p>
+                            <div className="flex items-center gap-3 text-amber-500">
+                                <Info className="w-5 h-5" />
+                                <span className="text-[10px] font-black tracking-widest">O DIVERSÃO VEM PRIMEIRO</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </section>
+                  </div>
+                )}
+              </>
+            )}
           </div>
 
-          <div className="panel flex flex-col">
-            <h3 className="text-sm font-black text-white uppercase mb-4 flex items-center gap-2"><Mic className="w-4 h-4 text-purple-400" /> Voz do Mestre</h3>
-            <form onSubmit={handleTTS} className="space-y-3">
-              <textarea value={ttsMessage} onChange={e => setTtsMessage(e.target.value)} className="w-full bg-[#0c1527] border border-[#2a4387]/50 rounded-xl p-3 text-white text-xs outline-none focus:border-purple-500 min-h-[100px]" placeholder="Fale algo épico..." />
-              <button disabled={!ttsMessage.trim() || !channel} className="w-full py-3 bg-purple-600 text-white rounded-lg text-xs font-black uppercase tracking-widest disabled:opacity-30">Anunciar</button>
-            </form>
-          </div>
-
-          {selectedChar ? (
-            <div className="panel h-fit space-y-4">
-              <div className="flex justify-between items-center"><h3 className="font-bold text-white leading-tight">{selectedChar.name}</h3><button onClick={() => setSelectedChar(null)} className="text-[10px] text-slate-500 underline">Fechar</button></div>
-              <div className="space-y-3 pt-3 border-t border-[#2a4387]/30">
-                 <ul className="space-y-2 max-h-40 overflow-y-auto pr-1">
-                    {selectedChar.inventory?.map(i => (
-                      <li key={i.id} className="flex justify-between text-xs bg-[#0c1527] p-2 rounded border border-[#2a4387]/30"><span>{i.name} x{i.quantity}</span><button onClick={() => removeItem(selectedChar, i.id)} className="text-red-500/40"><Trash2 className="w-3 h-3" /></button></li>
-                    ))}
-                 </ul>
-                 <form onSubmit={handleGiveItem} className="space-y-2 mt-4 pt-4 border-t border-[#2a4387] border-dashed">
-                    <input type="text" value={itemName} onChange={e => setItemName(e.target.value)} placeholder="Novo item..." className="w-full bg-[#0c1527] border border-[#2a4387]/50 rounded p-2 text-xs" required />
-                    <button className="w-full py-2 bg-blue-600 text-white rounded font-bold text-xs uppercase">Dar Item</button>
-                 </form>
+          {/* Right Sidebar - Global DM Tools */}
+          <aside className="space-y-8">
+            {/* Quick Dice Log (Shared style) */}
+            <div className="bg-black/40 backdrop-blur-2xl border border-white/5 rounded-[2.5rem] p-8 shadow-2xl flex flex-col min-h-[450px]">
+              <h2 className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-8 flex items-center gap-3 border-b border-white/5 pb-4">
+                <Dice5 className="w-4 h-4 text-blue-400" /> MESA EM TEMPO REAL
+              </h2>
+              <div className="flex-1 space-y-4 overflow-y-auto custom-scrollbar-thin">
+                {diceLogs.slice(0, 15).map((log, i) => (
+                  <div key={i} className="flex justify-between items-center gap-4 animate-in fade-in slide-in-from-right duration-500">
+                    <div className="min-w-0">
+                      <span className="text-[10px] font-black text-blue-400 uppercase tracking-widest block truncate">{log.player}</span>
+                      <span className="text-[10px] font-bold text-slate-600 block uppercase">Rolou {log.dieType}</span>
+                    </div>
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-black text-white text-lg border ${log.naturalRoll === 20 ? 'bg-amber-500/20 border-amber-500/50 text-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.3)]' : 'bg-white/5 border-white/5'}`}>
+                      {log.total}
+                    </div>
+                  </div>
+                ))}
+                {diceLogs.length === 0 && (
+                  <div className="h-full flex flex-col items-center justify-center text-slate-700 italic space-y-3 py-20">
+                    <Skull className="w-10 h-10 opacity-10" />
+                    <span className="text-[9px] font-black uppercase tracking-widest">A aguardar o destino...</span>
+                  </div>
+                )}
               </div>
             </div>
-          ) : (
-            <div className="panel text-center py-8 text-slate-600 italic text-xs">Selecione um herói para gerenciar itens.</div>
-          )}
 
-
-          {/* Dice Log */}
-          <div className="panel h-[400px] flex flex-col bg-[#0c1527]/40 border-blue-500/20">
-            <h3 className="text-xs font-black text-blue-400 uppercase mb-6 tracking-widest flex items-center gap-2">
-              <Dice5 className="w-4 h-4" /> Log de Dados da Mesa
-            </h3>
-            <div className="flex-1 overflow-y-auto space-y-3 custom-scrollbar pr-2">
-              {diceLogs.map((log, index) => (
-                <div key={index} className="flex justify-between items-center text-xs mb-2 pb-2 border-b border-[#2a4387]/20 animate-in slide-in-from-right duration-300">
-                  <div>
-                    <span className="font-bold text-blue-400 block">{log.player}</span>
-                    <span className="text-slate-500 text-[10px]">{log.dieType} {log.modifier >= 0 ? '+' : ''}{log.modifier}</span>
-                  </div>
-                  <div className="text-right">
-                    <span className={`text-lg font-black ${log.naturalRoll === 20 ? 'text-amber-500 drop-shadow-[0_0_8px_rgba(245,158,11,0.5)]' : 'text-white'}`}>
-                      {log.total}
-                    </span>
-                  </div>
+            {/* Narrator AI / DM Voice */}
+            <div className="bg-[#15234b]/60 backdrop-blur-2xl border border-white/10 rounded-[2.5rem] p-8 shadow-2xl">
+              <h2 className="text-[10px] font-black text-white uppercase tracking-[0.2em] mb-6 flex items-center gap-3">
+                <Mic className="w-4 h-4 text-purple-400" /> VOZ DO NARRADOR
+              </h2>
+              <form onSubmit={handleTTS} className="space-y-4">
+                <div className="relative group">
+                  <div className="absolute -inset-1 bg-gradient-to-r from-purple-600 to-blue-600 rounded-2xl blur opacity-10 group-focus-within:opacity-30 transition duration-500"></div>
+                  <textarea 
+                    value={ttsMessage} 
+                    onChange={e => setTtsMessage(e.target.value)} 
+                    className="relative w-full bg-[#0c1527] border border-white/10 rounded-2xl p-4 text-white text-xs outline-none focus:border-purple-500/50 min-h-[120px] resize-none transition-all placeholder:text-slate-700 font-bold" 
+                    placeholder="Descreva a cena ou faça um anúncio épico..." 
+                  />
                 </div>
-              ))}
-              {diceLogs.length === 0 && (
-                <div className="h-full flex flex-col items-center justify-center text-slate-600 italic">
-                  <Dice5 className="w-8 h-8 opacity-20 mb-2" />
-                  <span>Aguardando rolagens...</span>
-                </div>
-              )}
+                <button 
+                  disabled={!ttsMessage.trim() || !channel} 
+                  className="w-full py-4 bg-gradient-to-r from-purple-700 to-purple-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-[0.3em] shadow-lg hover:shadow-purple-500/20 active:scale-95 disabled:opacity-20 transition-all flex items-center justify-center gap-3"
+                >
+                  <Sparkles className="w-4 h-4" /> TRANSMITIR NARRAÇÃO
+                </button>
+              </form>
             </div>
-          </div>
+
+            {/* Item Allocation Modal (Repurposed as floating panel) */}
+            {selectedChar && (
+              <div className="bg-indigo-600/10 backdrop-blur-3xl border border-indigo-500/30 rounded-[2.5rem] p-8 shadow-2xl animate-in zoom-in-95 duration-300">
+                <div className="flex justify-between items-center mb-6">
+                  <h3 className="text-sm font-black text-white uppercase tracking-widest italic">{selectedChar.name}</h3>
+                  <button onClick={() => setSelectedChar(null)} className="p-1.5 rounded-lg bg-white/5 text-slate-500 hover:text-white transition-all"><Plus className="w-4 h-4 rotate-45" /></button>
+                </div>
+                
+                <div className="space-y-6">
+                  <div className="max-h-40 overflow-y-auto pr-2 custom-scrollbar-thin space-y-2">
+                    {selectedChar.inventory?.map(i => (
+                      <div key={i.id} className="flex justify-between items-center bg-black/40 p-3 rounded-xl border border-white/5 group">
+                        <span className="text-[10px] font-black text-slate-300 uppercase truncate pr-2">{i.name} <span className="text-slate-600 font-medium">x{i.quantity}</span></span>
+                        <button onClick={() => removeItem(selectedChar, i.id)} className="text-red-500/30 hover:text-red-500 transition-all"><Trash2 className="w-3.5 h-3.5" /></button>
+                      </div>
+                    ))}
+                    {(!selectedChar.inventory || selectedChar.inventory.length === 0) && <p className="text-[10px] text-slate-700 italic text-center py-4">Mochila vazia</p>}
+                  </div>
+
+                  <form onSubmit={handleGiveItem} className="space-y-3 pt-4 border-t border-white/5">
+                    <input 
+                      type="text" 
+                      value={itemName} 
+                      onChange={e => setItemName(e.target.value)} 
+                      placeholder="Nome do item..." 
+                      className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-white text-[10px] font-bold outline-none focus:border-indigo-500 transition-all" 
+                      required 
+                    />
+                    <button className="w-full py-3 bg-indigo-600 text-white rounded-xl font-black text-[10px] tracking-widest uppercase shadow-lg hover:bg-indigo-500 active:scale-95 transition-all">
+                      CONCEDER ITEM
+                    </button>
+                  </form>
+                </div>
+              </div>
+            )}
+          </aside>
         </div>
       </div>
+
       {showCompendium && <ClassCompendium onClose={() => setShowCompendium(false)} />}
     </div>
   );

@@ -1,3 +1,12 @@
+export interface Scene {
+  id: string;
+  name: string;
+  description: string;
+  imageUrl: string;
+  x: number;
+  y: number;
+}
+
 export interface Campaign {
   id: string;
   title: string;
@@ -8,6 +17,7 @@ export interface Campaign {
   openingNarration: string;
   /** Primeira mensagem que o Mestre IA envia assim que a campanha começa */
   startMessage: string;
+  scenes: Scene[];
 }
 
 export const CAMPAIGNS: Campaign[] = [
@@ -23,6 +33,11 @@ export const CAMPAIGNS: Campaign[] = [
       'A Maldição do Rei Morto — Capítulo I: A Névoa Carmesim',
     startMessage:
       'INÍCIO DE CAMPANHA: A Maldição do Rei Morto. Apresente a abertura épica da campanha, descrevendo a vila de Shadowfen coberta por uma névoa vermelha, cadáveres que se movem pelas ruas e um ancião sobrevivente que tenta alertar os heróis sobre o Rei Lich Aldric. Termine pedindo ao jogador como ele reage ao ver a névoa chegar.',
+    scenes: [
+      { id: 'shadowfen', name: 'Vila de Shadowfen', description: 'Uma vila envolta em névoa carmesim.', imageUrl: '/shadowfen.png', x: 20, y: 70 },
+      { id: 'cemiterio', name: 'Cemitério de Valdoria', description: 'Onde os mortos não descansam.', imageUrl: '/valdoria.png', x: 50, y: 40 },
+      { id: 'castelo', name: 'Castelo do Rei Morto', description: 'A morada do Lich Aldric.', imageUrl: '/castle.png', x: 80, y: 20 }
+    ]
   },
   {
     id: 'tesouro_do_mar_tempestuoso',
@@ -36,6 +51,11 @@ export const CAMPAIGNS: Campaign[] = [
       'O Tesouro do Mar Tempestuoso — Capítulo I: O Mapa Rasgado',
     startMessage:
       'INÍCIO DE CAMPANHA: O Tesouro do Mar Tempestuoso. Narre a cena de abertura: o herói está na Taverna do Porto Enferrujado, em Saltpool, quando um marinheiro moribundo cai à sua mesa segurando metade de um mapa com coordenadas de um tesouro. Descreva o porto, o cheiro de maresia, outros piratas curiosos de longe e o moribundo que sussurra "El Dracão... é real". Termine pedindo ao jogador o que ele faz.',
+    scenes: [
+      { id: 'porto', name: 'Porto Enferrujado', description: 'Um porto decadente cheio de segredos.', imageUrl: '/port.png', x: 15, y: 80 },
+      { id: 'mar_aberto', name: 'Mar Tempestuoso', description: 'Onde as ondas escondem perigos.', imageUrl: '/stormy.png', x: 50, y: 50 },
+      { id: 'ilha_tesouro', name: 'Ilha do Dracão', description: 'O destino final do mapa rasgado.', imageUrl: '/island.png', x: 85, y: 15 }
+    ]
   },
   {
     id: 'floresta_dos_fae',
@@ -49,6 +69,11 @@ export const CAMPAIGNS: Campaign[] = [
       'A Floresta dos Fae — Capítulo I: O Choro na Neblina',
     startMessage:
       'INÍCIO DE CAMPANHA: A Floresta dos Fae. Narre a chegada do herói à pequena aldeia de Millhaven: casas com janelas trancadas, rostos assustados, e a prefeita Elara — uma elfa envelhecida — pedindo ajuda urgente. Três crianças desapareceram na última semana. Ao anoitecer, risos infantis são ouvidos vindo da floresta. Descreva a cena atmosférica e pergunte ao jogador como ele se aproxima da floresta.',
+    scenes: [
+      { id: 'millhaven', name: 'Aldeia de Millhaven', description: 'Uma aldeia sob a sombra do medo.', imageUrl: '/village.png', x: 20, y: 80 },
+      { id: 'arenvale', name: 'Floresta de Arenvale', description: 'Um bosque mágico e perigoso.', imageUrl: '/arenvale.png', x: 50, y: 40 },
+      { id: 'circulo_fae', name: 'Círculo dos Fae', description: 'O portal para o Reino das Fadas.', imageUrl: '/fae.png', x: 80, y: 10 }
+    ]
   },
   {
     id: 'dungeon_do_mago_louco',
@@ -62,6 +87,11 @@ export const CAMPAIGNS: Campaign[] = [
       'A Dungeon do Mago Louco — Piso 1: O Salão das Ilusões',
     startMessage:
       'INÍCIO DE CAMPANHA: A Dungeon do Mago Louco. Narre a chegada à Torre de Marvex: uma estrutura absurda de 50 andares que desafia a gravidade, com janelas em ângulos impossíveis e luzes coloridas piscando no interior. Na entrada, um gárgula de pedra acorda e diz: "Bem-vindo ao Teste de Marvex. Sobreviventes ganham tudo. Tolos ganham uma lápide divertida." Descreva o primeiro andar — um salão de espelhos onde as imagens refletidas se movem independentemente — e pergunte ao jogador como ele entra.',
+    scenes: [
+      { id: 'entrada_torre', name: 'Base da Torre', description: 'A entrada para a insanidade de Marvex.', imageUrl: '/marvex_tower.png', x: 10, y: 90 },
+      { id: 'sala_maquinas', name: 'Sala das Máquinas', description: 'Puzzles e engrenagens mágicas.', imageUrl: '/marvex_gears.png', x: 50, y: 50 },
+      { id: 'topo_marvex', name: 'O Topo da Torre', description: 'Onde o Mago Louco aguarda.', imageUrl: '/marvex_peak.png', x: 90, y: 10 }
+    ]
   },
   {
     id: 'guerra_dos_dragões',
@@ -75,6 +105,11 @@ export const CAMPAIGNS: Campaign[] = [
       'A Guerra dos Dragões — Capítulo I: Cinzas do Horizonte',
     startMessage:
       'INÍCIO DE CAMPANHA: A Guerra dos Dragões. Narre a cena de abertura dramática: o herói está no acampamento do Exército da Aliança quando o horizonte se ilumina — a cidade de Ironhold está em chamas, atacada por Ignarax. O General Theron convoca os melhores exploradores para uma missão suicida: infiltrar o covil do dragão para roubar informações sobre o Ovo Primordial. Descreva o barulho das asas, o calor das chamas ao longe e o olhar desesperado dos soldados. Pergunte ao jogador se ele aceita a missão.',
+    scenes: [
+      { id: 'acampamento', name: 'Acampamento Aliado', description: 'O último bastião de esperança.', imageUrl: '/camp.png', x: 10, y: 80 },
+      { id: 'ruinas_ironhold', name: 'Ruínas de Ironhold', description: 'Cinzas e chamas sob o céu noturno.', imageUrl: '/ruins.png', x: 50, y: 40 },
+      { id: 'covil_dragao', name: 'Vulcão de Ignarax', description: 'O coração do território inimigo.', imageUrl: '/images/scenes/tumba.png', x: 90, y: 15 }
+    ]
   },
   {
     id: 'mistério_da_cidade',
@@ -88,5 +123,10 @@ export const CAMPAIGNS: Campaign[] = [
       'O Mistério de Ravenport — Caso I: A Marca do Corvo',
     startMessage:
       'INÍCIO DE CAMPANHA: O Mistério de Ravenport. Narre a cena de abertura: madrugada chuvosa, o herói é acordado por um mensageiro da Guarda com um envelope lacrado. Dentro, uma convocação urgente do Capitão Harrow para a mansão Blackthorn, onde o terceiro nobre em duas semanas foi encontrado morto. A cena do crime tem um corvo negro pintado na parede com sangue. Descreva o clima noir, a chuva nas ruas de paralelepípedo e o nervosismo incomum dos guardas. Pergunte ao jogador como ele chega à mansão.',
+    scenes: [
+      { id: 'beco_ravenport', name: 'Beco de Ravenport', description: 'Lugar de negócios escusos.', imageUrl: '/images/scenes/porao.png', x: 15, y: 75 },
+      { id: 'mansao_blackthorn', name: 'Mansão Blackthorn', description: 'Uma cena de crime perturbadora.', imageUrl: '/images/scenes/taverna.png', x: 50, y: 40 },
+      { id: 'catedrar_corvo', name: 'Catedral Negligenciada', description: 'Onde a verdade reside.', imageUrl: '/images/scenes/tumba.png', x: 80, y: 20 }
+    ]
   },
 ];

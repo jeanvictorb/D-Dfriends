@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Heart, User, LogOut, Package, BookOpen, Star, HelpCircle, Info, Users, Swords, Zap, Skull, Shield as ShieldIcon, Flame, Droplets, Wind, Ghost, Shield, PackagePlus, Loader2, CheckCircle, Trash2, Mic, Volume2, VolumeX, Sparkles, Plus, Dice5, ChevronRight } from 'lucide-react';
+import { Heart, User, LogOut, Package, BookOpen, Star, HelpCircle, Info, Users, Swords, Zap, Skull, Shield as ShieldIcon, Flame, Droplets, Wind, Ghost, Shield, PackagePlus, Loader2, CheckCircle, Trash2, Mic, Volume2, VolumeX, Sparkles, Plus, Dice5, ChevronRight, Target, RotateCcw, Move } from 'lucide-react';
 import { Character, DiceEvent, Profile, CombatItem, Room, RoomMessage } from './types';
 import CharacterCreator from './components/CharacterCreator';
 import CharacterSelection from './components/CharacterSelection';
@@ -11,17 +11,20 @@ import SkillTree from './components/SkillTree';
 import CompanionModal from './components/CompanionModal';
 import TheaterView from './components/TheaterView';
 import BattleMap from './components/BattleMap';
+import { Campaign, Scene, CAMPAIGNS } from './data/campaigns';
 import { classData, ClassData } from './data/classData';
 import { supabase } from './lib/supabase';
 import { getClassIcon } from './lib/classIcons';
 import { playSynthSound } from './lib/SoundSynth';
 import { User as SupabaseUser, Session, RealtimeChannel } from '@supabase/supabase-js';
 import RoomManager from './components/RoomManager';
+import LandingPage from './components/LandingPage';
 
 // Constantes removidas pois a lógica foi consolidada
 
 const App: React.FC = () => {
   const [session, setSession] = useState<Session | null>(null);
+  const [showLanding, setShowLanding] = useState(true);
   const [user, setUser] = useState<SupabaseUser | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [room, setRoom] = useState<Room | null>(null);
@@ -44,6 +47,11 @@ const App: React.FC = () => {
   const [currentlyPlaying, setCurrentlyPlaying] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const playedMessagesRef = useRef<Set<string>>(new Set());
+
+  // Campaign & Scene State
+  const [activeCampaign, setActiveCampaign] = useState<Campaign | null>(null);
+  const [discoveredSceneIds, setDiscoveredSceneIds] = useState<string[]>([]);
+  const [currentSceneId, setCurrentSceneId] = useState<string>('');
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -107,8 +115,12 @@ const App: React.FC = () => {
       .on('broadcast', { event: 'view_update' }, ({ payload }: { payload: { mode: 'standard' | 'theater' | 'map' } }) => {
         setViewMode(payload.mode);
       })
-      .on('broadcast', { event: 'background_update' }, ({ payload }: { payload: { url: string } }) => {
+      .on('broadcast', { event: 'background_update' }, ({ payload }: { payload: { url: string, sceneId?: string } }) => {
         setBackgroundUrl(payload.url);
+        if (payload.sceneId) setCurrentSceneId(payload.sceneId);
+      })
+      .on('broadcast', { event: 'scene_discovery' }, ({ payload }: { payload: { discoveredIds: string[] } }) => {
+        setDiscoveredSceneIds(payload.discoveredIds);
       })
       .subscribe();
 
@@ -135,29 +147,34 @@ const App: React.FC = () => {
         throw error;
       }
 
-      if (!data) {
-        console.error('[TTS] Resposta vazia da Edge Function');
-        throw new Error('Falha ao obter áudio: Dados vazios');
+      const isDataValid = data && (data instanceof Blob || data instanceof ArrayBuffer || typeof data === 'object');
+      if (!isDataValid) {
+        console.error('[TTS] Formato de resposta inválido:', typeof data);
+        throw new Error('Falha ao obter áudio: Formato inválido');
       }
 
-      // Check if data is actually a Blob or ArrayBuffer
-      console.log('[TTS] Audio recebido. Tipo do dado:', typeof data, data instanceof Blob ? 'is Blob' : 'is NOT Blob');
-
       // Se o data for um objeto com erro (caso de falha silenciosa vinda da func)
-      if (typeof data === 'object' && !(data instanceof Blob) && (data as any).error) {
+      if (typeof data === 'object' && !(data instanceof Blob) && !(data instanceof ArrayBuffer) && (data as any).error) {
         throw new Error(`Erro retornado pela função: ${(data as any).error}`);
       }
 
       if (audioRef.current) {
         audioRef.current.pause();
+        audioRef.current.src = "";
         audioRef.current = null;
       }
 
       let audioUrl: string;
       if (data instanceof Blob) {
+        console.log('[TTS] Dado recebido como Blob');
         audioUrl = URL.createObjectURL(data);
+      } else if (data instanceof ArrayBuffer) {
+        console.log('[TTS] Dado recebido como ArrayBuffer');
+        const blob = new Blob([data], { type: 'audio/mpeg' });
+        audioUrl = URL.createObjectURL(blob);
       } else {
-        // Fallback for cases where it might be returned differently
+        // Fallback robusto
+        console.warn('[TTS] Tentando converter objeto/string para Blob...');
         const blob = new Blob([data], { type: 'audio/mpeg' });
         audioUrl = URL.createObjectURL(blob);
       }
@@ -174,11 +191,12 @@ const App: React.FC = () => {
       audio.onerror = (e) => {
         console.error('[TTS] Erro no elemento de áudio:', e);
         setCurrentlyPlaying(null);
+        URL.revokeObjectURL(audioUrl);
       };
 
       await audio.play().catch(e => {
         console.warn('[TTS] Autoplay bloqueado ou erro de reprodução:', e);
-        // Tentar interatividade: se o browser bloqueou, o usuário pode clicar no botão manual
+        // Tentar fallback se for erro de codec ou outro
       });
 
     } catch (err) {
@@ -353,12 +371,46 @@ const App: React.FC = () => {
     console.log("[TTS] Aguardando reprodução reativa...");
   };
 
+  const isNarrator = (name: string) => name === 'Narrador IA' || name === 'Narrador';
+
+  const handleSelectScene = (scene: Scene) => {
+    setCurrentSceneId(scene.id);
+    setBackgroundUrl(scene.imageUrl);
+    // Sync to other players via channel
+    if (channel) {
+      channel.send({ type: 'broadcast', event: 'background_update', payload: { url: scene.imageUrl, sceneId: scene.id } });
+    }
+  };
+
+  const handleDiscoverScene = (sceneId: string) => {
+    const updated = [...new Set([...discoveredSceneIds, sceneId])];
+    setDiscoveredSceneIds(updated);
+    if (channel) {
+      channel.send({ type: 'broadcast', event: 'scene_discovery', payload: { discoveredIds: updated } });
+    }
+  };
+
   const handleSendMessage = async (content: string) => {
     if (!room || !character) return;
     
     setIsAiThinking(true);
     
     const isCampaignStart = content.startsWith('INÍCIO DE CAMPANHA:');
+
+    // Handle Campaign Initialization
+    if (isCampaignStart) {
+      const campaignName = content.split(':')[1].trim().split('.')[0];
+      const foundCampaign = CAMPAIGNS.find(c => c.title.includes(campaignName) || c.id.includes(campaignName.toLowerCase().replace(/ /g, '_')));
+      if (foundCampaign) {
+        setActiveCampaign(foundCampaign);
+        const firstScene = foundCampaign.scenes[0];
+        if (firstScene) {
+          setDiscoveredSceneIds([firstScene.id]);
+          setCurrentSceneId(firstScene.id);
+          setBackgroundUrl(firstScene.imageUrl);
+        }
+      }
+    }
 
     // 1. Insert player message ONLY for real player actions (not campaign start system triggers)
     if (!isCampaignStart) {
@@ -396,10 +448,7 @@ const App: React.FC = () => {
 
         if (aiErr) {
           console.error("AI Master error:", aiErr);
-          // Friendly local feedback could be added here if needed, 
-          // but we avoid DB pollution.
         } else if (aiRes?.text) {
-          // O áudio será tocado automaticamente pelo useEffect que observa roomMessages
           await fetchRoomMessages(room.id);
         } else if (aiRes?.error) {
           console.error("AI returned error:", aiRes.error);
@@ -579,6 +628,14 @@ const App: React.FC = () => {
   if (loading) return <div className="min-h-screen flex items-center justify-center text-blue-400 font-bold text-xl animate-pulse">Carregando a Taverna...</div>;
 
   if (!session) {
+    if (showLanding) {
+      return (
+        <LandingPage 
+          onStart={() => setShowLanding(false)} 
+          onLogin={() => setShowLanding(false)} 
+        />
+      );
+    }
     return <Auth onAuthSuccess={() => { }} />;
   }
 
@@ -658,156 +715,122 @@ const App: React.FC = () => {
   }
 
   return (
-    <div className="container mx-auto p-4 lg:p-8 max-w-6xl min-h-screen relative">
-      {(rollingDice.isRolling || rollingDice.value > 0) && (
-        <Dice3D
-          value={rollingDice.value}
-          isRolling={rollingDice.isRolling}
-          onAnimationEnd={finalizeRoll}
-        />
-      )}
+    <div className="min-h-screen bg-[#0c1527] text-slate-200 relative overflow-hidden font-sans pb-20">
+      {/* Premium Atmospheric Effects */}
+      <div className="mist-overlay"></div>
+      <div className="particles-container">
+        {[...Array(15)].map((_, i) => (
+          <div 
+            key={i} 
+            className="particle" 
+            style={{ 
+              left: `${Math.random() * 100}%`, 
+              '--duration': `${15 + Math.random() * 25}s`,
+              animationDelay: `${Math.random() * 10}s`
+            } as any}
+          ></div>
+        ))}
+      </div>
 
-      {/* Header - Only visible in Standard mode */}
-      {viewMode === 'standard' && (
-        <header className="panel mb-8 flex flex-col lg:flex-row justify-between items-center gap-6">
-          <div className="flex items-center gap-6 w-full lg:w-auto">
-            <div className="relative group">
-              <div className="absolute -inset-1 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-2xl blur opacity-25 group-hover:opacity-50 transition duration-1000 group-hover:duration-200"></div>
-              <div className="relative w-20 h-20 rounded-2xl bg-slate-800 flex items-center justify-center text-3xl font-black border border-white/10 shadow-2xl overflow-hidden">
-                {character.image_url ? (
-                  <img src={character.image_url} alt={character.name} className="w-full h-full object-cover" />
-                ) : (
-                  <span className="text-white drop-shadow-lg">{character.name[0]}</span>
-                )}
-                <div className="absolute bottom-0 right-0 bg-blue-600 text-[10px] font-black px-1.5 py-0.5 rounded-tl-lg border-t border-l border-white/20">
-                  Lvl {character.level}
-                </div>
-              </div>
-            </div>
-            <div>
-              <div className="flex items-center gap-3 mb-1">
-                <h1 className="text-3xl font-black text-white tracking-tight uppercase italic">{character.name}</h1>
-                <div className="px-2 py-0.5 rounded-full bg-blue-500/20 border border-blue-500/30 text-[10px] font-black text-blue-400 uppercase tracking-widest">
-                  Ativo
-                </div>
-              </div>
-              <div className="flex items-center gap-4">
-                <p className="text-slate-400 font-bold uppercase tracking-[0.2em] text-xs flex items-center gap-2">
-                  <span className="text-blue-500">◈</span> {character.race} {character.class_subclass}
-                </p>
-                {room?.code && (
-                  <button
-                    onClick={() => { navigator.clipboard.writeText(room.code); alert(`Código "${room.code}" copiado!`); }}
-                    className="flex items-center gap-1.5 px-2.5 py-0.5 bg-indigo-600/20 border border-indigo-500/40 rounded-full text-[10px] font-black text-indigo-300 hover:bg-indigo-600/40 hover:text-white transition-all group"
-                  >
-                    <Users className="w-3 h-3" />
-                    <span className="tracking-widest uppercase">{room.code}</span>
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
+      {/* Background Decor */}
+      <div className="fixed inset-0 pointer-events-none opacity-40">
+        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-blue-600/20 rounded-full blur-[120px]"></div>
+        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-indigo-600/20 rounded-full blur-[120px]"></div>
+      </div>
 
-          <div className="flex items-center gap-4">
-            {/* View Mode Switcher for Players */}
-            <div className="flex bg-[#0c1527] p-1 rounded-xl border border-blue-500/20 mr-2">
-              <button
-                onClick={() => setViewMode('standard')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all ${viewMode === 'standard' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
-              >
-                FICHA
-              </button>
-              <button
-                onClick={() => setViewMode('theater')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all ${(viewMode as string) === 'theater' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
-              >
-                TEATRO
-              </button>
-              <button
-                onClick={() => setViewMode('map')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all ${(viewMode as string) === 'map' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
-              >
-                MAPA
-              </button>
-            </div>
+      <div className="container mx-auto p-4 lg:p-8 max-w-7xl relative z-10 animate-in fade-in duration-1000">
+        {(rollingDice.isRolling || rollingDice.value > 0) && (
+          <Dice3D
+            value={rollingDice.value}
+            isRolling={rollingDice.isRolling}
+            onAnimationEnd={finalizeRoll}
+          />
+        )}
 
-            <button
-              onClick={() => {
-                setIsMuted(!isMuted);
-                if (isMuted && audioRef.current === null) {
-                  const unlock = new Audio();
-                  unlock.play().catch(() => {});
-                }
-              }}
-              title={isMuted ? "Ativar som" : "Mutar narração"}
-              className={`p-2 rounded-xl border transition-all ${isMuted ? 'bg-red-900/20 border-red-500/30 text-red-400' : 'bg-green-900/20 border-green-500/30 text-green-400'}`}
-            >
-              {isMuted ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
-            </button>
-
-            <button
-              onClick={() => setShowCompendium(true)}
-              className="flex items-center gap-2 px-4 py-2 interactive-btn text-amber-400 hover:text-white hover:bg-amber-600/50 border-amber-500/30 text-sm font-bold"
-            >
-              <BookOpen className="w-4 h-4" />
-              <span className="hidden md:inline">Compêndio</span>
-            </button>
-
-            <div className="text-right flex flex-col items-end border-r border-[#2a4387]/30 pr-6 hidden sm:flex group relative">
-              <div className="flex items-center gap-1 mb-1">
-                <span className="text-xs font-bold text-slate-300 uppercase">HP</span>
-              </div>
-              <p className="text-2xl font-black text-white">{character.hp_current} / {character.hp_max}</p>
-            </div>
-
-            <button
-              onClick={() => setCharacter(null)}
-              className="flex items-center gap-2 px-4 py-2 interactive-btn text-blue-300 hover:text-white hover:bg-blue-600/50 border-blue-500/30 text-sm font-bold"
-            >
-              <LogOut className="w-4 h-4" />
-              <span className="hidden md:inline">Sair</span>
-            </button>
-          </div>
-        </header>
-      )}
-
-
-      <div className="max-w-[1700px] mx-auto px-4 sm:px-6 lg:px-8 py-8 relative z-10">
-        {/* Combat Tracker (Initiative) Overlay */}
-        {combatOrder.length > 0 && (
-          <div className="panel bg-[#0c1527]/90 border-blue-500/50 backdrop-blur-md mb-8 animate-in slide-in-from-top duration-500">
-            <h2 className="text-xs font-black text-blue-400 uppercase tracking-[0.2em] mb-4 flex items-center gap-2">
-              <Swords className="w-4 h-4" /> Ordem de Combate
-            </h2>
-            <div className="flex gap-4 overflow-x-auto pb-2 custom-scrollbar">
-              {combatOrder.map((item, idx) => {
-                const isCurrent = item.isTurn;
-                const isMyTurn = item.charId === character?.id && isCurrent;
-                
-                return (
-                  <div 
-                    key={idx} 
-                    className={`min-w-[120px] p-3 rounded-xl border transition-all ${isCurrent ? 'bg-blue-600/20 border-blue-500 ring-2 ring-blue-500/30' : 'bg-slate-900/50 border-slate-700/50'}`}
-                  >
-                    <div className="flex justify-between items-center mb-1">
-                      <span className={`text-[10px] font-black ${isCurrent ? 'text-blue-300' : 'text-slate-500'}`}>#{idx + 1}</span>
-                      <span className="text-[10px] font-bold text-white bg-slate-800 px-1 rounded">{item.initiative}</span>
-                    </div>
-                    <p className={`text-sm font-bold truncate ${isCurrent ? 'text-white' : 'text-slate-400'}`}>{item.name}</p>
-                    {isMyTurn && (
-                      <div className="mt-2 text-[9px] font-black text-blue-400 animate-pulse uppercase tracking-widest text-center italic">Seu Turno!</div>
-                    )}
+        {/* Floating Premium Header */}
+        {viewMode === 'standard' && (
+          <header className="bg-[#15234b]/60 backdrop-blur-2xl border border-white/10 rounded-[2.5rem] p-6 mb-10 shadow-2xl flex flex-col lg:flex-row justify-between items-center gap-8 group transition-all hover:border-white/20">
+            <div className="flex items-center gap-8 w-full lg:w-auto">
+              <div className="relative">
+                <div className="absolute -inset-2 bg-gradient-to-tr from-blue-600 to-indigo-600 rounded-[2.5rem] blur opacity-20 group-hover:opacity-40 transition duration-1000"></div>
+                <div className="relative w-24 h-24 rounded-[2rem] bg-[#0c1527]/80 flex items-center justify-center border border-white/10 shadow-inner p-3 overflow-hidden">
+                  <img src="/logo.png" alt="Logo" className="w-full h-full object-contain drop-shadow-[0_0_10px_rgba(59,130,246,0.5)]" />
+                  <div className="absolute bottom-0 right-0 bg-blue-600 text-[10px] font-black px-2 py-1 rounded-tl-xl border-t border-l border-white/20 shadow-lg">
+                    NV {character.level}
                   </div>
-                );
-              })}
+                </div>
+              </div>
+              
+              <div className="space-y-2">
+                <div className="flex items-center gap-4">
+                  <h1 className="text-4xl font-black text-white italic tracking-tighter uppercase leading-none drop-shadow-md">
+                    {character.name}
+                  </h1>
+                  <span className="px-3 py-1 rounded-full bg-green-500/10 border border-green-500/30 text-[9px] font-black text-green-400 uppercase tracking-widest flex items-center gap-1.5 animate-pulse">
+                    <div className="w-1.5 h-1.5 rounded-full bg-green-500"></div> Online
+                  </span>
+                </div>
+                
+                <div className="flex flex-wrap items-center gap-4 text-slate-400 text-xs font-bold uppercase tracking-widest">
+                  <span className="flex items-center gap-2"><span className="text-blue-500">◈</span> {character.race} {character.class_subclass}</span>
+                  {room?.code && (
+                    <button
+                      onClick={() => { navigator.clipboard.writeText(room.code); alert(`Código "${room.code}" copiado!`); }}
+                      className="flex items-center gap-2 px-3 py-1 bg-white/5 border border-white/10 rounded-xl hover:bg-white/10 hover:text-white transition-all text-[10px]"
+                    >
+                      <Users className="w-3.5 h-3.5" /> {room.code}
+                    </button>
+                  )}
+                </div>
+              </div>
             </div>
-          </div>
+
+            <div className="flex items-center gap-6">
+              {/* Desktop View Switcher */}
+              <div className="hidden md:flex bg-black/40 p-1.5 rounded-2xl border border-white/5 shadow-inner">
+                {[
+                  { id: 'standard', label: 'FICHA', icon: User },
+                  { id: 'theater', label: 'TEATRO', icon: Sparkles },
+                  { id: 'map', label: 'MAPA', icon: Target }
+                ].map(mode => (
+                  <button
+                    key={mode.id}
+                    onClick={() => setViewMode(mode.id as any)}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-black tracking-widest transition-all ${viewMode === mode.id ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
+                  >
+                    <mode.icon className="w-3.5 h-3.5" /> {mode.label}
+                  </button>
+                ))}
+              </div>
+
+              <div className="flex items-center gap-3 border-l border-white/5 pl-6">
+                <button
+                  onClick={() => setIsMuted(!isMuted)}
+                  className={`p-3 rounded-2xl border transition-all hover:scale-110 ${isMuted ? 'bg-red-500/10 border-red-500/30 text-red-400' : 'bg-green-500/10 border-green-500/30 text-green-400'}`}
+                >
+                  {isMuted ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
+                </button>
+                <button
+                  onClick={() => setCharacter(null)}
+                  className="p-3 rounded-2xl bg-white/5 border border-white/10 text-slate-400 hover:bg-white/10 hover:text-white transition-all hover:scale-110"
+                >
+                  <RotateCcw className="w-5 h-5" />
+                </button>
+                <button
+                  onClick={() => supabase.auth.signOut()}
+                  className="p-3 rounded-2xl bg-red-500/10 border border-red-500/30 text-red-400 hover:bg-red-500/20 transition-all hover:scale-110"
+                >
+                  <LogOut className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+          </header>
         )}
 
         {/* Dynamic View Content */}
         {viewMode === 'theater' && (
           <TheaterView 
-            room={room}
+            room={room!}
             backgroundUrl={backgroundUrl} 
             messages={roomMessages}
             partyCharacters={partyCharacters}
@@ -819,13 +842,20 @@ const App: React.FC = () => {
             playNarration={playNarration}
             currentlyPlaying={currentlyPlaying}
             onClose={() => setViewMode('standard')}
+            isNarrator={isNarrator}
+            activeCampaign={activeCampaign}
+            discoveredSceneIds={discoveredSceneIds}
+            currentSceneId={currentSceneId}
+            onSelectScene={handleSelectScene}
+            onDiscoverScene={handleDiscoverScene}
+            isMaster={!!(user?.email === 'admin@admin.com' || user?.email?.startsWith('mestre'))}
           />
         )}
 
         {viewMode === 'map' && (
           <BattleMap 
             partyCharacters={partyCharacters} 
-            channel={channel} 
+            channel={channel!} 
             isAdmin={false}
             backgroundUrl={backgroundUrl}
             onBack={() => setViewMode('standard')}
@@ -833,218 +863,223 @@ const App: React.FC = () => {
         )}
 
         {viewMode === 'standard' && (
-          <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-            <main className="lg:col-span-3 space-y-6">
-              {/* Health Section */}
-              <section className="panel">
-                <div className="flex justify-between items-end mb-4">
-                  <div className="flex items-center gap-3">
-                    <Heart className="text-rose-500 w-5 h-5" />
-                    <h2 className="text-lg font-bold text-white">Pontos de Vida</h2>
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+            {/* Main Character Sheet Column */}
+            <div className="lg:col-span-3 space-y-8 pb-12">
+              
+              {/* Combat Tracker (Initiative) Overlay */}
+              {combatOrder.length > 0 && (
+                <div className="bg-[#15234b]/40 backdrop-blur-xl border border-blue-500/30 rounded-[2rem] p-6 shadow-2xl animate-in slide-in-from-top duration-500">
+                  <h2 className="text-xs font-black text-blue-400 uppercase tracking-[0.2em] mb-4 flex items-center gap-2">
+                    <Swords className="w-4 h-4" /> Ordem de Combate
+                  </h2>
+                  <div className="flex gap-4 overflow-x-auto pb-2 custom-scrollbar">
+                    {combatOrder.map((item, idx) => {
+                      const isCurrent = item.isTurn;
+                      const isMyTurn = item.charId === character?.id && isCurrent;
+                      
+                      return (
+                        <div 
+                          key={idx} 
+                          className={`min-w-[140px] p-4 rounded-2xl border transition-all ${isCurrent ? 'bg-blue-600/20 border-blue-500 ring-4 ring-blue-500/20' : 'bg-black/20 border-white/5'}`}
+                        >
+                          <div className="flex justify-between items-center mb-2">
+                            <span className={`text-[10px] font-black ${isCurrent ? 'text-blue-300' : 'text-slate-500'}`}>#{idx + 1}</span>
+                            <span className="text-[10px] font-black text-white bg-white/10 px-2 py-0.5 rounded-full border border-white/10">{item.initiative}</span>
+                          </div>
+                          <p className={`text-sm font-black truncate uppercase tracking-tight ${isCurrent ? 'text-white' : 'text-slate-400'}`}>{item.name}</p>
+                          {isMyTurn && (
+                            <div className="mt-2 text-[8px] font-black text-blue-400 animate-pulse uppercase tracking-[0.2em] text-center italic">Seu Turno!</div>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
-                  <p className="text-2xl font-bold text-white">
-                    {character.hp_current} <span className="text-slate-400 text-xl font-normal">/ {character.hp_max}</span>
-                  </p>
                 </div>
+              )}
 
-                <div className="w-full h-3 bg-[#0c1527] rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-blue-500 transition-all duration-300"
-                    style={{ width: `${(character.hp_current / character.hp_max) * 100}%` }}
-                  ></div>
-                </div>
-              </section>
-
-              {/* Dice Tray */}
-              <section className="panel bg-[#0c1527]/40 border-blue-500/20">
-                <h2 className="text-xs font-black text-blue-400 uppercase tracking-[0.2em] mb-4 flex items-center gap-2">
-                  <Dice5 className="w-4 h-4" /> Bandeja de Dados (Danos e Testes)
-                </h2>
-                <div className="flex flex-wrap gap-3">
-                  {[
-                    { label: 'd4', size: 4, desc: 'Danos pequenos (Adagas, Clavas) e feitiços como Bênção.' },
-                    { label: 'd6', size: 6, desc: 'Armas comuns (Espadas Curtas, Arcos) e a clássica Bola de Fogo.' },
-                    { label: 'd8', size: 8, desc: 'Armas marciais (Espadas Longas, Rapiárias) e Curar Ferimentos.' },
-                    { label: 'd10', size: 10, desc: 'Armas pesadas ou habilidades de classe como Rajada Mística.' },
-                    { label: 'd12', size: 12, desc: 'Machados de Batalha enormes e a Fúria do Bárbaro.' },
-                    { label: 'd20', size: 20, desc: 'O dado principal! Usado para Ataques, Testes e Resistências.' },
-                    { label: 'd100', size: 100, desc: 'Usado para tabelas de sorte raras e Intervenção Divina.' },
-                  ].map((die) => (
-                    <button
-                      key={die.label}
-                      onClick={() => handleDiceRoll(die.label, die.size)}
-                      className="flex-1 min-w-[80px] group relative bg-[#15234b] border border-[#2a4387]/50 rounded-xl p-3 hover:border-blue-500 hover:bg-blue-600/20 transition-all active:scale-95"
-                    >
-                      <span className="text-lg font-black text-white group-hover:text-blue-200">{die.label}</span>
-                      {/* Tooltip */}
-                      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 w-48 p-2 bg-slate-900 border border-slate-700 rounded-lg text-[10px] text-slate-300 font-bold opacity-0 group-hover:opacity-100 transition-opacity z-50 pointer-events-none shadow-2xl">
-                        {die.desc}
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              </section>
-
-              {/* Attributes Grid */}
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+              {/* Runic Attributes Grid */}
+              <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
                 {[
-                  { label: 'FORÇA', val: character.strength, desc: 'Poder físico, atletismo e dano corpo-a-corpo.' },
-                  { label: 'DESTREZA', val: character.dexterity, desc: 'Agilidade, reflexos, equilíbrio e precisão.' },
-                  { label: 'CONSTITUIÇÃO', val: character.constitution, desc: 'Saúde, vigor e resistência vital.' },
-                  { label: 'INTELIGÊNCIA', val: character.intelligence, desc: 'Raciocínio lógico, memória e saber arcano.' },
-                  { label: 'SABEDORIA', val: character.wisdom, desc: 'Percepção, intuição e conexão com o mundo.' },
-                  { label: 'CARISMA', val: character.charisma, desc: 'Personalidade, persuasão e liderança.' },
-                ].map((attr) => (
+                  { label: 'Força', key: 'strength', color: 'from-orange-600/40 to-orange-900/40', shadow: 'shadow-orange-900/20' },
+                  { label: 'Destreza', key: 'dexterity', color: 'from-emerald-600/40 to-emerald-900/40', shadow: 'shadow-emerald-900/20' },
+                  { label: 'Constit.', key: 'constitution', color: 'from-red-600/40 to-red-900/40', shadow: 'shadow-red-900/20' },
+                  { label: 'Inteligência', key: 'intelligence', color: 'from-blue-600/40 to-blue-900/40', shadow: 'shadow-blue-900/20' },
+                  { label: 'Sabedoria', key: 'wisdom', color: 'from-purple-600/40 to-purple-900/40', shadow: 'shadow-purple-900/20' },
+                  { label: 'Carisma', key: 'charisma', color: 'from-pink-600/40 to-pink-900/40', shadow: 'shadow-pink-900/20' }
+                ].map(attr => (
                   <button
-                    key={attr.label}
-                    onClick={() => handleRoll(attr.label, attr.val)}
-                    className="panel hover:bg-[#1e3470] cursor-pointer flex flex-col items-center justify-center py-6 px-4 transition-all group relative overflow-visible"
+                    key={attr.key}
+                    onClick={() => handleRoll(attr.label, (character as any)[attr.key])}
+                    className={`group relative h-32 bg-gradient-to-br ${attr.color} backdrop-blur-md border border-white/10 rounded-[2rem] flex flex-col items-center justify-center transition-all hover:-translate-y-1 hover:border-white/30 hover:shadow-2xl ${attr.shadow} overflow-hidden`}
                   >
-                    <div className="flex items-center gap-1 mb-2">
-                      <span className="text-xs font-bold text-slate-400 group-hover:text-blue-300 transition-colors">{attr.label}</span>
-                      <HelpCircle className="w-3 h-3 text-slate-600 opacity-50" />
-                    </div>
-                    <span className="text-3xl font-bold text-white mb-2">{attr.val}</span>
-                    <div className="text-sm font-medium text-blue-300">
-                      ({calculateModifier(attr.val) >= 0 ? '+' : ''}{calculateModifier(attr.val)})
-                    </div>
-                    
-                    {/* Tooltip */}
-                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-56 p-3 bg-slate-900 border border-slate-700 rounded-xl text-xs text-slate-400 font-medium opacity-0 group-hover:opacity-100 transition-opacity z-50 pointer-events-none shadow-2xl text-center">
-                      <p className="mb-2 text-white font-bold">{attr.desc}</p>
-                      <div className="pt-2 border-t border-slate-700/50 text-[10px] italic">
-                        Cálculo: (Valor - 10) / 2 <br/>
-                        Ex: 16 vira +3, 8 vira -1.
-                      </div>
+                    <div className="absolute inset-0 bg-gradient-to-tr from-white/10 to-transparent pointer-events-none"></div>
+                    <span className="relative text-[10px] font-black text-white/50 uppercase tracking-[0.2em] mb-1">
+                      {attr.label}
+                    </span>
+                    <span className="relative text-4xl font-black text-white drop-shadow-lg group-hover:scale-110 transition-transform">
+                      {(character as any)[attr.key]}
+                    </span>
+                    <div className="relative mt-2 px-3 py-1 bg-black/30 rounded-full border border-white/5 text-[10px] font-black text-blue-400 group-hover:bg-blue-600 group-hover:text-white transition-all">
+                      {calculateModifier((character as any)[attr.key]) >= 0 ? '+' : ''}{calculateModifier((character as any)[attr.key])}
                     </div>
                   </button>
                 ))}
               </div>
 
-              {/* Inventory / Backpack */}
-              <section className="panel">
-                <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
-                  <Package className="w-5 h-5 text-amber-500" />
-                  Sua Mochila
-                </h2>
-                <div className="bg-[#0c1527] rounded-xl border border-[#2a4387]/50 p-4 min-h-[120px]">
-                  {character.inventory && character.inventory.length > 0 ? (
-                    <ul className="space-y-3">
-                      {character.inventory.map(item => (
-                        <li key={item.id} className="flex justify-between items-center border-b border-[#2a4387]/30 pb-2 last:border-0 last:pb-0">
-                          <div>
-                            <span className="font-bold text-blue-300">{item.name} <span className="text-slate-500 text-xs ml-1">x{item.quantity}</span></span>
-                            {item.description && <p className="text-xs text-slate-400 mt-1">{item.description}</p>}
-                          </div>
-                          <span className="text-xs font-bold px-2 py-1 bg-blue-900/40 text-blue-400 rounded border border-blue-500/20 capitalize">{item.type}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <div className="flex flex-col items-center justify-center text-slate-500 py-6">
-                      <Package className="w-8 h-8 opacity-30 mb-2" />
-                      <span className="text-sm font-medium">Sua mochila está vazia...</span>
+              {/* Combat Overview Section */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="bg-[#15234b]/40 backdrop-blur-xl border border-white/10 rounded-[2.5rem] p-8 flex flex-col justify-between shadow-xl">
+                  <div className="flex justify-between items-center mb-6">
+                    <div className="flex items-center gap-3 text-red-500 font-black uppercase text-[10px] tracking-widest">
+                      <Heart className="w-4 h-4 fill-red-500" /> Vitalidade
                     </div>
-                  )}
+                    <button className="text-white/20 hover:text-white transition-colors"><ChevronRight className="w-4 h-4" /></button>
+                  </div>
+                  <div className="flex items-end justify-between mb-4">
+                    <span className="text-6xl font-black text-white italic tracking-tighter drop-shadow-lg">{character.hp_current}</span>
+                    <span className="text-xl font-bold text-slate-500 mb-2">/ {character.hp_max} PV</span>
+                  </div>
+                  <div className="h-3 bg-black/40 rounded-full overflow-hidden border border-white/5 shadow-inner">
+                    <div 
+                      className="h-full bg-gradient-to-r from-red-600 via-red-500 to-orange-400 transition-all duration-1000 shadow-[0_0_15px_rgba(239,68,68,0.4)]"
+                      style={{ width: `${(character.hp_current/character.hp_max)*100}%` }}
+                    ></div>
+                  </div>
+                </div>
+
+                <div className="md:col-span-2 grid grid-cols-3 gap-4">
+                  {[
+                    { label: 'Classe de Armadura', value: character.ac, icon: Shield, color: 'text-amber-500' },
+                    { label: 'Iniciativa', value: calculateModifier(character.dexterity) >= 0 ? '+' + calculateModifier(character.dexterity) : calculateModifier(character.dexterity), icon: Zap, color: 'text-blue-500' },
+                    { label: 'Deslocamento', value: '9m', icon: Move, color: 'text-emerald-500' }
+                  ].map((stat, i) => (
+                    <div key={i} className="bg-[#15234b]/40 backdrop-blur-xl border border-white/10 rounded-[2rem] p-6 flex flex-col items-center justify-center text-center group transition-all hover:border-white/20 hover:bg-white/5 shadow-lg">
+                      <stat.icon className={`w-6 h-6 ${stat.color} mb-3 group-hover:scale-110 transition-transform`} />
+                      <span className="text-3xl font-black text-white italic tracking-tighter mb-1 leading-none">{stat.value}</span>
+                      <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest leading-tight">{stat.label}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Dice Tray */}
+              <section className="bg-[#15234b]/20 backdrop-blur-md border border-white/5 rounded-[2.5rem] p-8">
+                <h2 className="text-sm font-black text-white uppercase tracking-[0.2em] mb-6 flex items-center gap-3">
+                  <Dice5 className="w-5 h-5 text-blue-400" /> Mesa de Rolagens
+                </h2>
+                <div className="grid grid-cols-4 md:grid-cols-7 gap-4">
+                  {[4, 6, 8, 10, 12, 20, 100].map(size => (
+                    <button
+                      key={size}
+                      onClick={() => handleDiceRoll(`d${size}`, size)}
+                      className="group relative flex flex-col items-center justify-center py-6 bg-white/5 border border-white/10 rounded-2xl hover:bg-blue-600 hover:border-blue-400 transition-all hover:-translate-y-1 active:scale-95 shadow-lg"
+                    >
+                      <span className="text-2xl font-black text-white group-hover:scale-110 transition-transform">d{size}</span>
+                    </button>
+                  ))}
                 </div>
               </section>
 
-              {/* Skill Tree */}
-              {currentCharClassData && (
-                <section className="panel overflow-hidden relative group">
-                  <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
-                    <div>
-                      <h2 className="text-xl font-bold text-white flex items-center gap-2">
-                        <Star className="w-5 h-5 text-blue-400" />
-                        Suas Habilidades de {currentCharClassData.name}
-                      </h2>
-                      <p className="text-sm text-slate-400 mt-1 max-w-xl">
-                        Esta é a sua progressão de classe. Conforme você sobe de nível, desbloqueia novas capacidades marciais e mágicas únicas.
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-900/30 border border-blue-500/20 rounded-lg">
-                      <Info className="w-4 h-4 text-blue-400" />
-                      <span className="text-xs font-bold text-blue-300">Nível {character.level}</span>
-                    </div>
-                  </div>
-                  <div className="bg-[#0c1527]/50 rounded-2xl border border-[#2a4387]/30">
-                    <SkillTree 
-                      abilities={currentCharClassData.abilities} 
-                      color={currentCharClassData.color} 
-                    />
+              {/* Inventory and Skills */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <section className="bg-[#15234b]/40 backdrop-blur-xl border border-white/10 rounded-[2.5rem] p-8 shadow-xl">
+                  <h2 className="text-xl font-black text-white uppercase tracking-widest mb-6 flex items-center gap-3">
+                    <Package className="w-6 h-6 text-amber-500" /> Mochila
+                  </h2>
+                  <div className="space-y-3 max-h-[300px] overflow-y-auto px-2 custom-scrollbar">
+                    {character.inventory?.map(item => (
+                      <div key={item.id} className="flex justify-between items-center bg-white/5 p-4 rounded-2xl border border-white/5 group hover:border-white/20 transition-all">
+                        <div>
+                          <p className="font-black text-white text-sm uppercase italic group-hover:text-blue-400 transition-colors">{item.name}</p>
+                          <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">x{item.quantity} • {item.type}</p>
+                        </div>
+                        <CheckCircle className="w-4 h-4 text-slate-700" />
+                      </div>
+                    ))}
+                    {(!character.inventory || character.inventory.length === 0) && (
+                      <p className="text-xs text-slate-500 italic text-center py-8">Sua mochila está vazia...</p>
+                    )}
                   </div>
                 </section>
-              )}
-            </main>
 
-            <aside className="space-y-6">
-              {/* Party Dashboard */}
-              <div className="panel flex flex-col overflow-hidden">
-                <h2 className="text-sm font-black text-white mb-6 uppercase tracking-[0.2em] flex items-center gap-2">
-                  <Users className="w-4 h-4 text-blue-400" />
-                  Companheiros
+                <section className="bg-[#15234b]/40 backdrop-blur-xl border border-white/10 rounded-[2.5rem] p-8 shadow-xl">
+                  <h2 className="text-xl font-black text-white uppercase tracking-widest mb-6 flex items-center gap-3">
+                    <Star className="w-6 h-6 text-blue-400" /> Habilidades
+                  </h2>
+                  <div className="space-y-4 max-h-[300px] overflow-y-auto px-2 custom-scrollbar">
+                    {currentCharClassData?.abilities.slice(0, character.level + 2).map((skill, idx) => (
+                      <div key={idx} className="bg-gradient-to-r from-blue-600/10 to-transparent p-4 rounded-2xl border-l-4 border-l-blue-500 border-y border-r border-white/5">
+                        <p className="text-xs font-black text-blue-300 uppercase tracking-widest mb-1">{skill.name}</p>
+                        <p className="text-[11px] text-slate-400 font-medium leading-relaxed">{skill.description}</p>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              </div>
+            </div>
+
+            {/* Sidebar Column */}
+            <aside className="space-y-8">
+              {/* Party Members */}
+              <div className="bg-[#15234b]/60 backdrop-blur-2xl border border-white/10 rounded-[2.5rem] p-8 shadow-2xl">
+                <h2 className="text-sm font-black text-white mb-6 uppercase tracking-[0.2em] flex items-center gap-3 border-b border-white/5 pb-4">
+                  <Users className="w-5 h-5 text-blue-400" /> Aventureiros
                 </h2>
-                
-                <div className="space-y-3 max-h-64 overflow-y-auto pr-2 custom-scrollbar">
-                  {partyCharacters.filter((c: Character) => c.id !== character.id).map((comp: Character) => {
+                <div className="space-y-4 max-h-[350px] overflow-y-auto pr-2 custom-scrollbar">
+                  {partyCharacters.filter(c => c.id !== character.id).map(comp => {
                     const ic = getClassIcon(comp.class_subclass);
-                    const hpPerc = (comp.hp_current / comp.hp_max) * 100;
-                    
                     return (
                       <button 
                         key={comp.id}
                         onClick={() => setSelectedCompanion(comp)}
-                        className="w-full bg-[#0c1527] border border-[#2a4387]/30 hover:border-blue-500/50 rounded-xl p-3 px-4 flex items-center gap-4 transition-all group"
+                        className="w-full bg-white/5 border border-white/5 hover:border-blue-500/50 rounded-2xl p-4 flex items-center gap-4 transition-all group hover:bg-white/10"
                       >
-                        <div className="w-10 h-10 rounded-lg flex items-center justify-center text-xl shrink-0"
-                             style={{ backgroundColor: ic.color + '15', border: `1px solid ${ic.color}33` }}>
+                        <div className="w-12 h-12 rounded-xl flex items-center justify-center text-2xl transition-transform group-hover:scale-110"
+                             style={{ backgroundColor: ic.color + '20', border: `1px solid ${ic.color}40` }}>
                           {ic.emoji}
                         </div>
-                        <div className="flex-1 min-w-0 text-left">
-                          <div className="flex justify-between items-center mb-1">
-                            <span className="font-bold text-white text-sm truncate group-hover:text-blue-400 transition-colors">{comp.name}</span>
-                            <span className="text-[10px] font-black text-slate-500">NV {comp.level}</span>
-                          </div>
-                          <div className="w-full h-1.5 bg-slate-900 rounded-full overflow-hidden">
-                            <div className="h-full bg-gradient-to-r from-rose-600 to-red-500" style={{ width: `${hpPerc}%` }}></div>
+                        <div className="flex-1 text-left min-w-0">
+                          <p className="font-black text-white text-sm truncate uppercase italic tracking-tight">{comp.name}</p>
+                          <div className="flex items-center gap-2 mt-1">
+                            <div className="flex-1 h-1.5 bg-black/40 rounded-full overflow-hidden">
+                              <div className="h-full bg-red-500" style={{ width: `${(comp.hp_current/comp.hp_max)*100}%` }}></div>
+                            </div>
+                            <span className="text-[9px] font-black text-slate-500 uppercase">NV {comp.level}</span>
                           </div>
                         </div>
                       </button>
                     );
                   })}
-                  {partyCharacters.filter((c: Character) => c.id !== character.id).length === 0 && (
-                    <p className="text-xs text-slate-500 text-center py-4 italic">Sozinho na taverna por enquanto...</p>
+                  {partyCharacters.length <= 1 && (
+                    <p className="text-[11px] text-slate-500 text-center py-6 italic">A taverna está vazia...</p>
                   )}
                 </div>
               </div>
 
-              {/* mesa log */}
-              <div className="panel h-full min-h-[400px] flex flex-col">
-                <h2 className="text-sm font-black text-white mb-6 uppercase tracking-[0.2em]">
-                  Log da Mesa
-                </h2>
-
-                <div className="flex-1 overflow-y-auto space-y-3">
-                  {diceLogs.map((log: DiceEvent, index: number) => (
-                    <div key={index} className="flex justify-between items-center text-sm mb-2 pb-2 border-b border-[#2a4387]/30">
-                      <div>
-                        <span className="font-medium text-blue-200 block">{log.player}</span>
-                        <span className="text-slate-400 text-xs">d20 {log.modifier >= 0 ? '+' : ''}{log.modifier}</span>
+              {/* dice logs shortcut */}
+              <div className="bg-black/40 backdrop-blur-xl border border-white/5 rounded-[2.5rem] p-8 shadow-inner overflow-hidden flex flex-col min-h-[400px]">
+                <h2 className="text-xs font-black text-slate-500 uppercase tracking-[0.2em] mb-6">Mesa em Tempo Real</h2>
+                <div className="flex-1 space-y-4 overflow-y-auto custom-scrollbar-thin">
+                  {diceLogs.slice(0, 15).map((log, i) => (
+                    <div key={i} className="flex justify-between items-center gap-4 animate-in fade-in slide-in-from-right duration-500">
+                      <div className="min-w-0">
+                        <span className="text-[10px] font-black text-blue-400 uppercase tracking-widest block truncate">{log.player}</span>
+                        <span className="text-[10px] font-bold text-slate-600 block uppercase">Rolou {log.dieType}</span>
                       </div>
-                      <span className={`text-xl font-bold ${log.naturalRoll === 20 ? 'text-blue-400' : 'text-white'}`}>
+                      <div className="w-10 h-10 rounded-xl bg-white/5 border border-white/5 flex items-center justify-center font-black text-white text-lg">
                         {log.total}
-                      </span>
+                      </div>
                     </div>
                   ))}
-                  {diceLogs.length === 0 && (
-                    <p className="text-sm text-slate-400">Nenhuma rolagem ainda...</p>
-                  )}
+                  {diceLogs.length === 0 && <p className="text-[11px] text-slate-700 italic text-center py-8 uppercase tracking-widest">Aguardando o destino...</p>}
                 </div>
               </div>
             </aside>
           </div>
         )}
       </div>
+
       {showCompendium && <ClassCompendium onClose={() => setShowCompendium(false)} />}
       {selectedCompanion && (
         <CompanionModal 

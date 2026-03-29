@@ -1,9 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Character, Room, RoomMessage } from '../types';
-import { MessageSquare, Users, Sparkles, ScrollText, Send, Loader2, Dice5, Scroll, Play, Volume2, VolumeX, PlayCircle } from 'lucide-react';
+import { MessageSquare, Users, Sparkles, ScrollText, Send, Loader2, Dice5, Scroll, Play, Volume2, VolumeX, PlayCircle, Navigation } from 'lucide-react';
 import CampaignSelector from './CampaignSelector';
-import { Campaign } from '../data/campaigns';
+import { Campaign, Scene } from '../data/campaigns';
 import { supabase } from '../lib/supabase';
+import CampaignMap from './CampaignMap';
 
 interface Props {
   room: Room;
@@ -13,12 +14,18 @@ interface Props {
   currentCharacter: Character | null;
   onSendMessage: (text: string) => void;
   isAiThinking?: boolean;
-  // Audio Controls from App.tsx
   isMuted: boolean;
   onToggleMute: () => void;
   playNarration: (text: string, id: string) => void;
   currentlyPlaying: string | null;
   onClose: () => void;
+  isNarrator: (name: string) => boolean;
+  activeCampaign?: Campaign | null;
+  discoveredSceneIds: string[];
+  currentSceneId: string;
+  onSelectScene: (scene: Scene) => void;
+  onDiscoverScene: (sceneId: string) => void;
+  isMaster: boolean;
 }
 
 const TheaterView: React.FC<Props> = ({ 
@@ -33,15 +40,37 @@ const TheaterView: React.FC<Props> = ({
   onToggleMute,
   playNarration,
   currentlyPlaying,
-  onClose
+  onClose,
+  isNarrator,
+  activeCampaign,
+  discoveredSceneIds,
+  currentSceneId,
+  onSelectScene,
+  onDiscoverScene,
+  isMaster
 }) => {
   const [inputText, setInputText] = useState('');
   const [showCampaigns, setShowCampaigns] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
-  const isNarrator = (name: string) => name === 'Narrador IA' || name === 'Narrador';
-
+  // Smart Sync - Auto change scenes based on keywords
   useEffect(() => {
+    if (!activeCampaign || messages.length === 0) return;
+    const lastMsg = messages[messages.length - 1];
+    
+    if (isNarrator(lastMsg.player_name)) {
+      activeCampaign.scenes.forEach(scene => {
+        // If scene name is mentioned in the narration, and it's not the current one
+        if (lastMsg.content.toLowerCase().includes(scene.name.toLowerCase()) && scene.id !== currentSceneId) {
+          // Auto-discover and select
+          if (!discoveredSceneIds.includes(scene.id) && isMaster) {
+            onDiscoverScene(scene.id);
+          }
+          onSelectScene(scene);
+        }
+      });
+    }
+
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
@@ -58,11 +87,12 @@ const TheaterView: React.FC<Props> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex flex-col items-center justify-end p-4 md:p-8 overflow-hidden bg-black">
+    <div className="fixed inset-0 z-[100] flex flex-col items-center justify-start p-4 md:p-8 overflow-hidden">
       {/* Background Layer */}
+      <div className="absolute inset-0 bg-black z-[-3]" />
       <div 
         className="absolute inset-0 transition-all duration-1000 ease-in-out bg-cover bg-center z-[-2] scale-105 animate-ken-burns"
-        style={{ backgroundImage: `url(${backgroundUrl || '/images/scenes/taverna.png'})` }}
+        style={{ backgroundImage: `url("${backgroundUrl || '/images/scenes/taverna.png'}")` }}
       />
       <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-black/40 z-[-1]" />
       
@@ -90,31 +120,57 @@ const TheaterView: React.FC<Props> = ({
         </div>
       </div>
 
-      <div className="w-full max-w-7xl grid grid-cols-1 lg:grid-cols-12 gap-8 items-end h-[85vh] relative">
+      <div className="flex-1 w-full max-w-7xl grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch pt-20 pb-10 relative transition-all duration-700 min-h-0">
         {/* Left Panel: Party */}
-        <div className="hidden lg:flex lg:col-span-3 flex-col gap-6 pb-20 h-full overflow-y-auto no-scrollbar">
+        <div className="hidden lg:flex lg:col-span-3 flex-col gap-6 h-full overflow-y-auto no-scrollbar pb-10">
           <div className="space-y-4">
             <h3 className="text-white text-[10px] font-black uppercase tracking-[0.3em] flex items-center gap-2 mb-2 opacity-70">
-              <Users className="w-4 h-4 text-blue-400" /> Grupo
+              <Users className="w-4 h-4 text-blue-400" /> Aventureiros
             </h3>
             <div className="flex flex-col gap-3">
               {partyCharacters.map(char => (
-                <div key={char.id} className="bg-white/5 backdrop-blur-2xl p-4 rounded-2xl flex items-center gap-4 border border-white/10 relative overflow-hidden group transition-all hover:bg-white/10 shadow-2xl">
-                  <div 
-                    className="absolute left-0 bottom-0 top-0 bg-blue-500/10 transition-all duration-700" 
-                    style={{ width: `${(char.hp_current / char.hp_max) * 100}%` }}
-                  />
-                  <div className="relative w-10 h-10 rounded-full bg-slate-900/50 flex items-center justify-center text-[12px] font-black border border-white/10 shadow-xl group-hover:scale-105 transition-transform">
-                    {char.name[0]}
-                  </div>
-                  <div className="relative flex-1">
-                    <p className="text-[11px] font-black text-white uppercase truncate tracking-wider">{char.name}</p>
-                    <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">{char.class_subclass}</p>
+                <div 
+                  key={char.id}
+                  className={`p-4 rounded-2xl border transition-all ${char.id === currentCharacter?.id ? 'bg-blue-600/20 border-blue-400/40 ring-1 ring-blue-400/20' : 'bg-white/5 border-white/10 opacity-60'}`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-slate-800 flex items-center justify-center text-xl">
+                      {char.icon}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-black text-white uppercase truncate">{char.name}</p>
+                      <div className="flex items-center gap-2 mt-1">
+                        <div className="flex-1 h-1 bg-slate-800 rounded-full overflow-hidden">
+                          <div 
+                            className="h-full bg-red-500 transition-all duration-500" 
+                            style={{ width: `${(char.hp_current / char.hp_max) * 100}%` }}
+                          />
+                        </div>
+                        <span className="text-[10px] font-bold text-slate-400">{char.hp_current}/{char.hp_max}</span>
+                      </div>
+                    </div>
                   </div>
                 </div>
               ))}
             </div>
           </div>
+
+          {/* Campaign Map Insight */}
+          {activeCampaign && (
+            <div className="space-y-4">
+               <h3 className="text-white text-[10px] font-black uppercase tracking-[0.3em] flex items-center gap-2 mb-2 opacity-70">
+                <Navigation className="w-4 h-4 text-amber-500" /> Jornada
+              </h3>
+              <CampaignMap 
+                scenes={activeCampaign.scenes}
+                discoveredSceneIds={discoveredSceneIds}
+                currentSceneId={currentSceneId}
+                onSelectScene={onSelectScene}
+                onDiscoverScene={onDiscoverScene}
+                isMaster={isMaster}
+              />
+            </div>
+          )}
 
           {/* Campaign Starter Card */}
           {room.is_ai_mode && (
@@ -142,12 +198,15 @@ const TheaterView: React.FC<Props> = ({
         </div>
 
         {/* Center: Interactive Chat */}
-        <div className="lg:col-span-9 h-full flex flex-col gap-6 relative">
-          <div className="flex-1 bg-white/[0.03] backdrop-blur-3xl rounded-[40px] border border-white/10 p-6 md:p-10 overflow-y-auto custom-scrollbar flex flex-col gap-8 relative mask-fade-top shadow-[0_0_50px_rgba(0,0,0,0.5)]">
+        <div className="lg:col-span-9 h-full flex flex-col gap-6 relative min-h-0 pb-10">
+          <div 
+            id="theater-chat-container"
+            className="flex-1 bg-white/[0.03] backdrop-blur-3xl rounded-[40px] border border-white/10 p-6 md:p-10 overflow-y-auto custom-scrollbar flex flex-col gap-8 relative shadow-[0_0_50px_rgba(0,0,0,0.5)]"
+          >
             {messages.length === 0 ? (
-              <div className="h-full flex flex-col items-center justify-center gap-6 opacity-70">
+              <div className="flex-1 flex flex-col items-center justify-center gap-6 opacity-70">
                 <MessageSquare className="w-12 h-12 text-slate-400" />
-                <p className="text-sm font-black uppercase tracking-[0.3em] text-slate-400">O silêncio precede a aventura...</p>
+                <p className="text-sm font-black uppercase tracking-[0.3em] text-slate-400 text-center px-4">O silêncio precede a aventura...</p>
                 {room.is_ai_mode && (
                   <button
                     onClick={() => setShowCampaigns(true)}
@@ -170,17 +229,22 @@ const TheaterView: React.FC<Props> = ({
                     {isNarrator(msg.player_name) && (
                       <button 
                         onClick={() => playNarration(msg.content, msg.id)}
+                        disabled={currentlyPlaying === msg.id}
                         className={`p-1 hover:bg-white/10 rounded-full transition-all ${currentlyPlaying === msg.id ? 'text-amber-300 scale-110' : 'text-amber-500/50 hover:text-amber-500'}`}
                         title="Replay Narration"
                       >
-                        <PlayCircle className={`w-3.5 h-3.5 ${currentlyPlaying === msg.id ? 'animate-spin-slow' : ''}`} />
+                        {currentlyPlaying === msg.id ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <PlayCircle className="w-3.5 h-3.5" />
+                        )}
                       </button>
                     )}
                   </div>
                   <div className={`
-                    relative p-8 rounded-[32px] max-w-[90%] shadow-[0_20px_50px_rgba(0,0,0,0.3)] border transition-all
+                    relative p-6 md:p-10 rounded-[32px] w-full max-w-[98%] lg:max-w-[94%] shadow-[0_20px_50px_rgba(0,0,0,0.3)] border transition-all overflow-visible min-h-fit
                     ${isNarrator(msg.player_name) 
-                      ? 'bg-amber-950/20 backdrop-blur-3xl border-amber-500/30 text-amber-50/90 italic font-serif text-2xl leading-relaxed border-l-4 border-l-amber-500' 
+                      ? 'bg-amber-950/25 backdrop-blur-3xl border-amber-500/30 text-amber-50/90 italic font-serif text-xl md:text-2xl leading-relaxed border-l-4 border-l-amber-500' 
                       : msg.type === 'dice'
                         ? 'bg-indigo-950/30 backdrop-blur-3xl border-indigo-500/40 text-indigo-100 shadow-[0_0_30px_rgba(99,102,241,0.2)]'
                         : msg.player_name === currentCharacter?.name 
