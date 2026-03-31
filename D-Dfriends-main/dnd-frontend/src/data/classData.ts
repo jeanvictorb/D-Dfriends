@@ -16,6 +16,7 @@ import {
 export interface Subclass {
   name: string;
   description: string;
+  abilities?: Ability[];
 }
 
 export interface Ability {
@@ -42,8 +43,22 @@ export const classData: ClassData[] = [
     icon: Flame,
     color: 'from-orange-600 to-red-700',
     subclasses: [
-      { name: 'Caminho do Furioso', description: 'Foca na fúria pura, permitindo ataques extras e imunidade a medo enquanto enfurecido.' },
-      { name: 'Caminho do Guerreiro Totêmico', description: 'Busca a orientação de espíritos animais (Urso, Águia, Lobo) para obter resistências e habilidades especiais.' }
+      { 
+        name: 'Caminho do Furioso', 
+        description: 'Foca na fúria pura, permitindo ataques extras e imunidade a medo enquanto enfurecido.',
+        abilities: [
+          { name: 'Fúria Frenética', level: 3, description: 'Você pode entrar em fúria frenética, permitindo realizar um ataque extra como ação bônus em cada turno.' },
+          { name: 'Fúria Inabalável', level: 6, description: 'Você não pode ser amedrontado ou encantado enquanto estiver em fúria.' }
+        ]
+      },
+      { 
+        name: 'Caminho do Guerreiro Totêmico', 
+        description: 'Busca a orientação de espíritos animais (Urso, Águia, Lobo) para obter resistências e habilidades especiais.',
+        abilities: [
+          { name: 'Espírito Totêmico (Urso)', level: 3, description: 'Enquanto em fúria, você tem resistência a todos os danos, exceto dano psíquico.' },
+          { name: 'Aspecto da Besta', level: 6, description: 'Você ganha um benefício mágico baseado no animal escolhido.' }
+        ]
+      }
     ],
     abilities: [
       { name: 'Fúria', level: 1, description: 'Em batalha, você luta com uma ferocidade primitiva. No seu turno, você pode entrar em fúria como uma ação bônus.' },
