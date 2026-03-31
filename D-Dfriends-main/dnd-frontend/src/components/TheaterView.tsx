@@ -1,18 +1,22 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { 
+  X, Mic, Send, Volume2, VolumeX, Sparkles, Image, 
+  Maximize2, Minimize2, Settings, List, RefreshCw, Book, MessageSquare, Users, ScrollText, Loader2, Dice5, Scroll, Play, PlayCircle, Navigation
+} from 'lucide-react';
 import { Character, Room, RoomMessage } from '../types';
-import { MessageSquare, Users, Sparkles, ScrollText, Send, Loader2, Dice5, Scroll, Play, Volume2, VolumeX, PlayCircle, Navigation } from 'lucide-react';
 import CampaignSelector from './CampaignSelector';
 import { Campaign, Scene } from '../data/campaigns';
-import { supabase } from '../lib/supabase';
 import CampaignMap from './CampaignMap';
+import Atmosphere from './Atmosphere';
+import { getClassIcon } from '../lib/classIcons';
 
 interface Props {
   room: Room;
   backgroundUrl: string;
   messages: RoomMessage[];
   partyCharacters: Character[];
-  currentCharacter: Character | null;
-  onSendMessage: (text: string) => void;
+  character: Character | null;
+  onSendMessage: (content: string) => Promise<void>;
   isAiThinking?: boolean;
   isMuted: boolean;
   onToggleMute: () => void;
@@ -20,6 +24,7 @@ interface Props {
   currentlyPlaying: string | null;
   onClose: () => void;
   isNarrator: (name: string) => boolean;
+  onOpenDiary: () => void;
   activeCampaign?: Campaign | null;
   discoveredSceneIds: string[];
   currentSceneId: string;
@@ -33,7 +38,7 @@ const TheaterView: React.FC<Props> = ({
   backgroundUrl, 
   messages, 
   partyCharacters, 
-  currentCharacter,
+  character,
   onSendMessage,
   isAiThinking = false,
   isMuted,
@@ -42,281 +47,283 @@ const TheaterView: React.FC<Props> = ({
   currentlyPlaying,
   onClose,
   isNarrator,
+  onOpenDiary,
   activeCampaign,
-  discoveredSceneIds,
   currentSceneId,
+  discoveredSceneIds,
   onSelectScene,
   onDiscoverScene,
   isMaster
 }) => {
   const [inputText, setInputText] = useState('');
+  const [showMap, setShowMap] = useState(false);
   const [showCampaigns, setShowCampaigns] = useState(false);
-  const chatEndRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Smart Sync - Auto change scenes based on keywords
   useEffect(() => {
-    if (!activeCampaign || messages.length === 0) return;
-    const lastMsg = messages[messages.length - 1];
+    const scrollToBottom = () => {
+      if (scrollRef.current) {
+        scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+      }
+    };
     
-    if (isNarrator(lastMsg.player_name)) {
-      activeCampaign.scenes.forEach(scene => {
-        // If scene name is mentioned in the narration, and it's not the current one
-        if (lastMsg.content.toLowerCase().includes(scene.name.toLowerCase()) && scene.id !== currentSceneId) {
-          // Auto-discover and select
-          if (!discoveredSceneIds.includes(scene.id) && isMaster) {
-            onDiscoverScene(scene.id);
-          }
-          onSelectScene(scene);
-        }
-      });
-    }
-
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    // Immediate scroll
+    scrollToBottom();
+    
+    // Delayed scroll to account for image loading or layout shifts from large text
+    const timer = setTimeout(scrollToBottom, 100);
+    return () => clearTimeout(timer);
   }, [messages]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!inputText.trim() || isAiThinking) return;
+    if (!inputText.trim()) return;
     onSendMessage(inputText);
     setInputText('');
   };
 
   const handleStartCampaign = (campaign: Campaign) => {
+    onSendMessage(`!!!START_CAMPAIGN:${campaign.id}`);
     setShowCampaigns(false);
-    onSendMessage(campaign.startMessage);
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex flex-col items-center justify-start p-4 md:p-8 overflow-hidden">
-      {/* Background Layer */}
-      <div className="absolute inset-0 bg-black z-[-3]" />
-      <div 
-        className="absolute inset-0 transition-all duration-1000 ease-in-out bg-cover bg-center z-[-2] scale-105 animate-ken-burns"
-        style={{ backgroundImage: `url("${backgroundUrl || '/images/scenes/taverna.png'}")` }}
-      />
-      <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-black/40 z-[-1]" />
+    <div className="fixed inset-0 z-[100] flex flex-col bg-slate-950 overflow-hidden font-sans">
       
-      {/* Header Info */}
-      <div className="absolute top-8 left-1/2 -translate-x-1/2 z-10 flex flex-col items-center gap-2">
-        <div className="px-6 py-2 bg-black/40 backdrop-blur-md border border-white/10 rounded-full flex items-center gap-3">
-          <Sparkles className="w-4 h-4 text-blue-400 animate-pulse" />
-          <h2 className="text-[10px] font-black text-white uppercase tracking-[0.4em]">{room.name}</h2>
-          <div className="w-1 h-1 rounded-full bg-white/20" />
-          <span className="text-[10px] font-bold text-blue-300/60 uppercase tracking-widest">{room.style}</span>
-          <div className="w-1 h-1 rounded-full bg-white/20" />
+      {/* Background Layer with Effects */}
+      <div className="absolute inset-0 z-0">
+        <div 
+          className="absolute inset-0 bg-cover bg-center bg-no-repeat transition-all duration-1000 animate-ken-burns opacity-60 scale-110"
+          style={{ backgroundImage: `url(${backgroundUrl || '/images/scenes/taverna.png'})` }}
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/40 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-b from-slate-950/60 via-transparent to-transparent" />
+        
+        {/* Environmental Atmosphere */}
+        <Atmosphere variant={activeCampaign?.id.includes('caminho_aventureiro') ? 'fire' : 'neutral'} />
+      </div>
+
+      {/* Top Header Controls */}
+      <div className="relative z-50 flex justify-between items-center p-6 md:p-8">
+        <div className="flex items-center gap-4">
+          <div className="w-12 h-12 bg-indigo-600 rounded-2xl flex items-center justify-center shadow-lg border border-indigo-400/30">
+            <ScrollText className="text-white w-6 h-6" />
+          </div>
+          <div>
+            <h2 className="text-xl font-black text-white italic truncate max-w-[200px] md:max-w-md uppercase tracking-tighter">
+              {room.name}
+            </h2>
+            <div className="flex items-center gap-2">
+              <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              <span className="text-[10px] font-black text-emerald-400 uppercase tracking-widest">Sessão Ativa</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 md:gap-4 ml-auto">
+
+          <button 
+            onClick={onOpenDiary}
+            className="p-3 bg-amber-500/10 hover:bg-amber-500/20 text-amber-500 rounded-2xl border border-amber-500/30 transition-all hover:scale-110 shadow-lg group relative"
+            title="Diário da Campanha"
+          >
+            <Book className="w-5 h-5 md:w-6 md:h-6" />
+            <span className="absolute -bottom-10 left-1/2 -translate-x-1/2 bg-slate-900 text-[10px] px-2 py-1 rounded border border-white/10 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">Ver Diário</span>
+          </button>
+
           <button 
             onClick={onToggleMute}
-            className="p-1 hover:bg-white/10 rounded-full transition-colors text-white/60 hover:text-white"
+            className="p-3 bg-white/5 hover:bg-white/10 rounded-2xl border border-white/10 text-white transition-all shadow-xl"
+            title={isMuted ? "Ativar Som" : "Mudar Som"}
           >
-            {isMuted ? <VolumeX className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
+            {isMuted ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
           </button>
-          <div className="w-1 h-1 rounded-full bg-white/20" />
           <button 
             onClick={onClose}
-            className="px-3 py-1 bg-white/10 hover:bg-white/20 rounded-full transition-all text-[9px] font-black text-white/80 uppercase tracking-widest border border-white/10"
+            className="px-6 py-3 bg-red-500/10 hover:bg-red-500/20 rounded-2xl border border-red-500/20 text-red-500 text-[10px] font-black uppercase tracking-widest transition-all shadow-xl"
           >
             Sair do Teatro
           </button>
         </div>
       </div>
 
-      <div className="flex-1 w-full max-w-7xl grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch pt-20 pb-10 relative transition-all duration-700 min-h-0">
-        {/* Left Panel: Party */}
-        <div className="hidden lg:flex lg:col-span-3 flex-col gap-6 h-full overflow-y-auto no-scrollbar pb-10">
-          <div className="space-y-4">
-            <h3 className="text-white text-[10px] font-black uppercase tracking-[0.3em] flex items-center gap-2 mb-2 opacity-70">
-              <Users className="w-4 h-4 text-blue-400" /> Aventureiros
+      <div className="relative z-10 flex-1 grid grid-cols-1 lg:grid-cols-12 gap-8 p-4 md:p-8 overflow-hidden">
+        
+        {/* Left Side: Party & Map */}
+        <div className="hidden lg:flex lg:col-span-3 flex-col gap-6 overflow-y-auto custom-scrollbar-thin pr-4 pb-20">
+          <div className="bg-black/40 backdrop-blur-2xl rounded-[2.5rem] border border-white/5 p-6 shadow-2xl">
+            <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] mb-6 flex items-center gap-2">
+              <Users className="w-4 h-4 text-blue-500" /> Grupo de Heróis
             </h3>
-            <div className="flex flex-col gap-3">
-              {partyCharacters.map(char => (
-                <div 
-                  key={char.id}
-                  className={`p-4 rounded-2xl border transition-all ${char.id === currentCharacter?.id ? 'bg-blue-600/20 border-blue-400/40 ring-1 ring-blue-400/20' : 'bg-white/5 border-white/10 opacity-60'}`}
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-slate-800 flex items-center justify-center text-xl">
-                      {char.icon}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-black text-white uppercase truncate">{char.name}</p>
-                      <div className="flex items-center gap-2 mt-1">
-                        <div className="flex-1 h-1 bg-slate-800 rounded-full overflow-hidden">
-                          <div 
-                            className="h-full bg-red-500 transition-all duration-500" 
-                            style={{ width: `${(char.hp_current / char.hp_max) * 100}%` }}
-                          />
-                        </div>
-                        <span className="text-[10px] font-bold text-slate-400">{char.hp_current}/{char.hp_max}</span>
+            <div className="space-y-4">
+              {partyCharacters.map(char => {
+                const icon = getClassIcon(char.class_subclass);
+                return (
+                  <div key={char.id} className={`p-4 rounded-3xl border transition-all ${char.id === character?.id ? 'bg-blue-600/20 border-blue-500/50 shadow-lg shadow-blue-500/10' : 'bg-black/40 border-white/5 opacity-60'}`}>
+                    <div className="flex items-center gap-3">
+                      <div 
+                        className="w-10 h-10 rounded-xl flex items-center justify-center text-xl shadow-lg border"
+                        style={{ backgroundColor: icon.color + '20', borderColor: icon.color + '40' }}
+                      >
+                        {icon.emoji}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="font-black text-white text-[11px] truncate uppercase tracking-wide">{char.name}</p>
+                        <p className="text-[9px] text-blue-400 font-bold uppercase tracking-widest truncate">{char.class_subclass}</p>
                       </div>
                     </div>
+                    <div className="mt-3 h-1.5 w-full bg-black/40 rounded-full overflow-hidden">
+                      <div 
+                        className={`h-full transition-all duration-1000 ${char.hp_current / char.hp_max < 0.3 ? 'bg-red-500' : 'bg-emerald-500'}`}
+                        style={{ width: `${Math.min(100, (char.hp_current / char.hp_max) * 100)}%` }} 
+                      />
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
 
-          {/* Campaign Map Insight */}
           {activeCampaign && (
-            <div className="space-y-4">
-               <h3 className="text-white text-[10px] font-black uppercase tracking-[0.3em] flex items-center gap-2 mb-2 opacity-70">
-                <Navigation className="w-4 h-4 text-amber-500" /> Jornada
-              </h3>
-              <CampaignMap 
-                scenes={activeCampaign.scenes}
-                discoveredSceneIds={discoveredSceneIds}
-                currentSceneId={currentSceneId}
-                onSelectScene={onSelectScene}
-                onDiscoverScene={onDiscoverScene}
-                isMaster={isMaster}
-              />
-            </div>
-          )}
-
-          {/* Campaign Starter Card */}
-          {room.is_ai_mode && (
-            <div className="mt-4 p-0.5 rounded-[28px] bg-gradient-to-br from-amber-500/30 to-transparent">
-              <button
-                onClick={() => setShowCampaigns(true)}
-                className="w-full p-5 rounded-[27px] bg-black/60 backdrop-blur-xl border border-white/5 hover:bg-black/80 flex flex-col gap-3 transition-all group relative overflow-hidden"
-              >
-                <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-                  <Scroll className="w-12 h-12 text-amber-500 rotate-12" />
-                </div>
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-amber-500/20 rounded-xl">
-                    <Play className="w-4 h-4 text-amber-500" />
-                  </div>
-                  <p className="text-[10px] font-black text-amber-500 uppercase tracking-[0.2em]">Campanhas</p>
-                </div>
-                <div className="text-left">
-                  <p className="text-xs font-bold text-white mb-1">Iniciar Nova História</p>
-                  <p className="text-[9px] text-slate-400 leading-relaxed uppercase tracking-tighter">Escolha uma aventura pré-montada para começar.</p>
-                </div>
-              </button>
-            </div>
+             <div className="bg-black/40 backdrop-blur-2xl rounded-[2.5rem] border border-white/5 p-2 shadow-2xl overflow-hidden min-h-[300px]">
+                <CampaignMap 
+                  scenes={activeCampaign.scenes}
+                  discoveredSceneIds={discoveredSceneIds}
+                  currentSceneId={currentSceneId}
+                  onSelectScene={onSelectScene}
+                  onDiscoverScene={onDiscoverScene}
+                  isMaster={isMaster}
+                />
+             </div>
           )}
         </div>
 
-        {/* Center: Interactive Chat */}
-        <div className="lg:col-span-9 h-full flex flex-col gap-6 relative min-h-0 pb-10">
+        {/* Center/Right: Chat Area */}
+        <div className="lg:col-span-9 flex flex-col bg-black/30 backdrop-blur-3xl rounded-[3rem] border border-white/5 overflow-hidden shadow-2xl relative">
           <div 
-            id="theater-chat-container"
-            className="flex-1 bg-white/[0.03] backdrop-blur-3xl rounded-[40px] border border-white/10 p-6 md:p-10 overflow-y-auto custom-scrollbar flex flex-col gap-8 relative shadow-[0_0_50px_rgba(0,0,0,0.5)]"
+            ref={scrollRef}
+            className="flex-1 overflow-y-auto p-6 md:p-10 space-y-12 scroll-smooth custom-scrollbar-thin pb-32"
           >
             {messages.length === 0 ? (
-              <div className="flex-1 flex flex-col items-center justify-center gap-6 opacity-70">
-                <MessageSquare className="w-12 h-12 text-slate-400" />
-                <p className="text-sm font-black uppercase tracking-[0.3em] text-slate-400 text-center px-4">O silêncio precede a aventura...</p>
-                {room.is_ai_mode && (
-                  <button
-                    onClick={() => setShowCampaigns(true)}
-                    className="flex items-center gap-2 px-6 py-3 bg-indigo-600/80 hover:bg-indigo-500 border border-indigo-400/30 rounded-2xl font-black text-white text-xs uppercase tracking-widest transition-all hover:scale-105 shadow-xl"
-                  >
-                    <Play className="w-4 h-4" />
-                    Iniciar Campanha com IA
-                  </button>
-                )}
+              <div className="h-full flex flex-col items-center justify-center opacity-20 text-center p-12">
+                <Sparkles className="w-16 h-16 mb-4 animate-spin-slow" />
+                <p className="font-black uppercase tracking-[0.3em] text-xs">O silêncio precede a sua história...</p>
               </div>
             ) : (
-              messages.map((msg, i) => (
-                <div 
-                  key={msg.id || i} 
-                  className={`flex flex-col gap-2 animate-fade-in ${msg.player_name === currentCharacter?.name ? 'items-end' : 'items-start'}`}
-                >
-                  <div className={`text-[10px] font-black uppercase tracking-widest flex items-center gap-2 ${isNarrator(msg.player_name) ? 'text-amber-500' : 'text-blue-400'}`}>
-                    {isNarrator(msg.player_name) && <ScrollText className="w-3.5 h-3.5" />}
-                    {msg.player_name}
-                    {isNarrator(msg.player_name) && (
-                      <button 
-                        onClick={() => playNarration(msg.content, msg.id)}
-                        disabled={currentlyPlaying === msg.id}
-                        className={`p-1 hover:bg-white/10 rounded-full transition-all ${currentlyPlaying === msg.id ? 'text-amber-300 scale-110' : 'text-amber-500/50 hover:text-amber-500'}`}
-                        title="Replay Narration"
-                      >
-                        {currentlyPlaying === msg.id ? (
-                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                        ) : (
-                          <PlayCircle className="w-3.5 h-3.5" />
-                        )}
-                      </button>
-                    )}
-                  </div>
-                  <div className={`
-                    relative p-6 md:p-10 rounded-[32px] w-full max-w-[98%] lg:max-w-[94%] shadow-[0_20px_50px_rgba(0,0,0,0.3)] border transition-all overflow-visible min-h-fit
-                    ${isNarrator(msg.player_name) 
-                      ? 'bg-amber-950/25 backdrop-blur-3xl border-amber-500/30 text-amber-50/90 italic font-serif text-xl md:text-2xl leading-relaxed border-l-4 border-l-amber-500' 
-                      : msg.type === 'dice'
-                        ? 'bg-indigo-950/30 backdrop-blur-3xl border-indigo-500/40 text-indigo-100 shadow-[0_0_30px_rgba(99,102,241,0.2)]'
-                        : msg.player_name === currentCharacter?.name 
-                          ? 'bg-blue-600/30 backdrop-blur-3xl border-blue-400/30 text-white' 
-                          : 'bg-white/[0.05] backdrop-blur-3xl border-white/10 text-slate-100'}
-                  `}>
-                    {msg.type === 'dice' ? (
-                      <div className="flex items-center gap-3">
-                        <Dice5 className="w-5 h-5 text-indigo-400" />
-                        <div>
-                          <p className="text-[10px] uppercase font-bold opacity-60">Rolagem</p>
-                          <p className="text-xl font-black">{msg.content}</p>
+              messages.map((msg, i) => {
+                const narrator = isNarrator(msg.player_name);
+                return (
+                  <div key={msg.id || i} className={`flex flex-col ${narrator ? 'items-center text-center px-4 md:px-16' : msg.player_name === character?.name ? 'items-end' : 'items-start'}`}>
+                    <div className={`group relative p-6 md:p-8 rounded-[2.5rem] transition-all duration-500 ${
+                      narrator 
+                        ? 'bg-transparent border-none max-w-4xl' 
+                        : msg.player_name === character?.name 
+                          ? 'bg-indigo-600/20 border border-indigo-500/30 max-w-[85%] shadow-xl' 
+                          : 'bg-white/5 border border-white/5 max-w-[85%] hover:border-white/10'
+                    }`}>
+                      {narrator && (
+                        <div className="mb-6 flex flex-col items-center gap-6">
+                           <button 
+                            onClick={() => playNarration(msg.content, msg.id || i.toString())}
+                            disabled={currentlyPlaying === msg.id}
+                            className={`w-16 h-16 bg-white/5 hover:bg-white/10 rounded-full flex items-center justify-center border border-white/10 text-white transition-all hover:scale-110 active:scale-95 group/play ${currentlyPlaying === msg.id ? 'animate-pulse' : ''}`}
+                            title="Ouvir Narração"
+                          >
+                             {currentlyPlaying === msg.id ? <Loader2 className="w-8 h-8 animate-spin" /> : <Play className="w-8 h-8" />}
+                          </button>
                         </div>
+                      )}
+
+                        <div className={`leading-relaxed tracking-wide whitespace-pre-wrap break-words ${
+                          narrator 
+                            ? 'text-2xl md:text-4xl font-black text-white italic drop-shadow-2xl font-serif' 
+                            : 'text-base font-medium text-slate-200'
+                        }`}>
+                        {msg.type === 'dice' ? (
+                          <div className="flex items-center gap-4 py-2">
+                            <div className="p-3 bg-indigo-600 rounded-2xl shadow-xl">
+                              <Dice5 className="w-6 h-6 text-white" />
+                            </div>
+                            <span className="text-3xl font-black italic tracking-tighter text-indigo-400">ROLO DE DADO: {msg.content}</span>
+                          </div>
+                        ) : (
+                          msg.content
+                        )}
                       </div>
-                    ) : (
-                      <p className="whitespace-pre-wrap">{msg.content}</p>
-                    )}
+
+                      {!narrator && (
+                        <div className={`mt-4 flex items-center gap-3 ${msg.player_name === character?.name ? 'flex-row-reverse' : ''}`}>
+                          <div className="w-8 h-8 rounded-xl bg-slate-800 flex items-center justify-center border border-white/10">
+                            <span className="text-[10px] font-black text-white uppercase">{msg.player_name[0]}</span>
+                          </div>
+                          <span className={`text-[10px] font-black uppercase tracking-widest ${msg.player_name === character?.name ? 'text-indigo-400' : 'text-slate-500'}`}>
+                            {msg.player_name}
+                          </span>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))
+                );
+              })
             )}
+
             {isAiThinking && (
-              <div className="flex items-center gap-3 text-amber-400/50 animate-pulse italic font-serif">
-                <Loader2 className="w-4 h-4 animate-spin" />
-                <span className="text-sm underline decoration-amber-500/20 underline-offset-4">O Mestre está tecendo o destino...</span>
+              <div className="flex flex-col items-center gap-4 py-8 opacity-40">
+                <div className="flex gap-2">
+                  <div className="w-2 h-2 rounded-full bg-indigo-500 animate-bounce" />
+                  <div className="w-2 h-2 rounded-full bg-indigo-500 animate-bounce delay-100" />
+                  <div className="w-2 h-2 rounded-full bg-indigo-500 animate-bounce delay-200" />
+                </div>
+                <span className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.2em]">O Mestre está tecendo o destino...</span>
               </div>
             )}
-            <div ref={chatEndRef} />
           </div>
 
-          {/* Input Area */}
-          <form onSubmit={handleSubmit} className="relative group">
-            <div className="absolute -inset-1 bg-gradient-to-r from-blue-600/20 to-indigo-600/20 rounded-[24px] blur opacity-25 group-focus-within:opacity-100 transition-opacity" />
-            <div className="relative flex items-center bg-black/60 backdrop-blur-2xl border border-white/10 rounded-[22px] p-2 pr-4 pl-6 shadow-2xl">
-              <input
-                type="text"
-                value={inputText}
-                onChange={(e) => setInputText(e.target.value)}
-                placeholder={isAiThinking ? "Aguarde a narração..." : "O que você faz?"}
-                disabled={isAiThinking}
-                className="flex-1 bg-transparent border-none py-4 text-white placeholder:text-slate-600 focus:outline-none font-medium h-14"
-              />
-              <button
-                type="submit"
-                disabled={!inputText.trim() || isAiThinking}
-                className="p-3 bg-blue-600 hover:bg-blue-500 disabled:opacity-20 disabled:grayscale text-white rounded-xl transition-all shadow-lg active:scale-95"
-              >
-                {isAiThinking ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
-              </button>
-            </div>
-            <div className="flex justify-center mt-3 gap-6">
-              <span className="text-[9px] font-bold text-slate-600 uppercase tracking-widest flex items-center gap-2">
-                <Dice5 className="w-3 h-3" /> Digite /roll d20 para dados
-              </span>
-              {room.is_ai_mode && (
+          {/* Bottom Chat Input */}
+          <div className="p-8 bg-black/40 border-t border-white/5 relative z-20">
+             {activeCampaign?.id === 'tutorial_caminho_aventureiro' && messages.length < 5 && (
+              <div className="absolute -top-12 left-1/2 -translate-x-1/2 animate-bounce">
+                <div className="bg-indigo-600 text-white text-[9px] font-black uppercase tracking-widest py-1.5 px-4 rounded-full shadow-2xl flex items-center gap-2 border border-indigo-400">
+                  <Sparkles className="w-3 h-3" /> Dica: Descreva sua ação no chat!
+                </div>
+              </div>
+            )}
+
+            <div className="flex flex-col gap-4 max-w-5xl mx-auto">
+              <form onSubmit={handleSubmit} className="flex gap-4">
+                <input 
+                  type="text" 
+                  value={inputText}
+                  onChange={(e) => setInputText(e.target.value)}
+                  placeholder="Seu destino aguarda sua voz..."
+                  className="flex-1 bg-white/5 border border-white/10 rounded-2xl px-6 py-5 text-white placeholder:text-slate-700 focus:outline-none focus:border-indigo-500/50 transition-all font-medium italic shadow-inner"
+                />
                 <button
-                  type="button"
-                  onClick={() => setShowCampaigns(true)}
-                  className="text-[9px] font-bold text-indigo-400/60 hover:text-indigo-400 uppercase tracking-widest flex items-center gap-2 transition-colors"
+                  type="submit"
+                  disabled={!inputText.trim()}
+                  className="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-20 text-white px-8 rounded-2xl font-black uppercase tracking-[0.2em] transition-all flex items-center gap-3 active:scale-95 shadow-xl shadow-indigo-600/30"
                 >
-                  <Scroll className="w-3 h-3" /> Escolher Campanha
+                  <Send className="w-5 h-5" />
                 </button>
-              )}
-              <span className="text-[9px] font-bold text-slate-600 uppercase tracking-widest flex items-center gap-2">
-                <Sparkles className="w-3 h-3" /> Mestre IA Ativo
-              </span>
+              </form>
+              
+              <div className="flex justify-center gap-8">
+                {room.is_ai_mode && (
+                  <button onClick={() => setShowCampaigns(true)} className="flex items-center gap-2 text-indigo-400/60 hover:text-indigo-300 transition-colors group">
+                     <Scroll className="w-3.5 h-3.5 group-hover:rotate-12 transition-transform" />
+                     <span className="text-[9px] font-black uppercase tracking-[0.2em]">Explorar Outras Crônicas</span>
+                  </button>
+                )}
+                <div className="flex items-center gap-2 text-slate-700">
+                  <Dice5 className="w-3.5 h-3.5" />
+                  <span className="text-[9px] font-black uppercase tracking-[0.2em]">Use /roll d20 para testes</span>
+                </div>
+              </div>
             </div>
-          </form>
+          </div>
         </div>
       </div>
 
-      {/* Campaign Selector Modal */}
       {showCampaigns && (
         <CampaignSelector
           onSelectCampaign={handleStartCampaign}

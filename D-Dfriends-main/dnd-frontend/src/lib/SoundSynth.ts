@@ -7,9 +7,10 @@ const getAudioContext = () => {
   return new (window.AudioContext || (window as any).webkitAudioContext)();
 };
 
-export const playSynthSound = (type: string) => {
+export const playSynthSound = (type: string, masterVolume: number = 1.0) => {
   const ctx = getAudioContext();
   const now = ctx.currentTime;
+  const vol = masterVolume;
 
   switch (type) {
     case 'sword': {
@@ -28,7 +29,7 @@ export const playSynthSound = (type: string) => {
       filter.frequency.exponentialRampToValueAtTime(100, now + 0.1);
 
       const gain = ctx.createGain();
-      gain.gain.setValueAtTime(0.5, now);
+      gain.gain.setValueAtTime(0.5 * vol, now);
       gain.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
 
       noise.connect(filter);
@@ -47,7 +48,7 @@ export const playSynthSound = (type: string) => {
         osc.type = 'sine';
         osc.frequency.setValueAtTime(freq, now + i * 0.05);
         gain.gain.setValueAtTime(0, now + i * 0.05);
-        gain.gain.linearRampToValueAtTime(0.2, now + i * 0.05 + 0.02);
+        gain.gain.linearRampToValueAtTime(0.2 * vol, now + i * 0.05 + 0.02);
         gain.gain.exponentialRampToValueAtTime(0.01, now + i * 0.05 + 0.1);
         osc.connect(gain);
         gain.connect(ctx.destination);
@@ -219,3 +220,95 @@ export const playSynthSound = (type: string) => {
     }
   }
 };
+
+// --- Ambience Engine ---
+class AmbienceEngine {
+  private ctx: AudioContext | null = null;
+  private source: AudioBufferSourceNode | null = null;
+  private gain: GainNode | null = null;
+  private currentType: string | null = null;
+
+  startAmbience(type: string, volume: number = 0.5) {
+    if (this.currentType === type) return;
+    this.stopAmbience();
+
+    this.ctx = getAudioContext();
+    this.gain = this.ctx.createGain();
+    this.gain.gain.setValueAtTime(0, this.ctx.currentTime);
+    this.gain.gain.linearRampToValueAtTime(volume, this.ctx.currentTime + 1);
+    this.gain.connect(this.ctx.destination);
+
+    const bufferSize = this.ctx.sampleRate * 2;
+    const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+
+    // Generate high-quality Brown Noise (smoother than white noise)
+    let lastOut = 0.0;
+    for (let i = 0; i < bufferSize; i++) {
+      const white = Math.random() * 2 - 1;
+      // Brown noise formula: integrated white noise with a leak
+      data[i] = (lastOut + (0.02 * white)) / 1.02;
+      lastOut = data[i];
+      
+      // Gain compensation for deep frequencies
+      if (type === 'caverna') data[i] *= 4.0;
+      else if (type === 'taverna') data[i] *= 2.5;
+      else data[i] *= 3.0; 
+    }
+
+    this.source = this.ctx.createBufferSource();
+    this.source.buffer = buffer;
+    this.source.loop = true;
+
+    const filter = this.ctx.createBiquadFilter();
+    if (type === 'taverna') {
+      filter.type = 'lowpass';
+      filter.frequency.value = 800;
+    } else if (type === 'floresta') {
+      filter.type = 'bandpass';
+      filter.frequency.value = 1200;
+    } else if (type === 'caverna') {
+      filter.type = 'lowpass';
+      filter.frequency.value = 200;
+    }
+
+    this.source.connect(filter);
+    
+    // Add a secondary filter for smoother texture
+    const filter2 = this.ctx.createBiquadFilter();
+    filter2.type = 'lowpass';
+    filter2.frequency.value = type === 'caverna' ? 100 : 1500;
+    filter.connect(filter2);
+
+    // Apply LFO for "movement" (gusts of wind, changing chatter)
+    const lfo = this.ctx.createOscillator();
+    const lfoGain = this.ctx.createGain();
+    lfo.type = 'sine';
+    lfo.frequency.value = type === 'floresta' ? 0.2 : 0.05; // Very slow
+    lfoGain.gain.value = 0.1; // 10% volume oscillation
+    
+    lfo.connect(lfoGain);
+    lfoGain.connect(this.gain.gain);
+    lfo.start();
+
+    filter2.connect(this.gain);
+    this.source.start();
+    this.currentType = type;
+  }
+
+  updateVolume(volume: number) {
+    if (this.gain && this.ctx) {
+      this.gain.gain.setTargetAtTime(volume, this.ctx.currentTime, 0.1);
+    }
+  }
+
+  stopAmbience() {
+    if (this.source) {
+      this.source.stop();
+      this.source.disconnect();
+    }
+    this.currentType = null;
+  }
+}
+
+export const ambienceEngine = new AmbienceEngine();

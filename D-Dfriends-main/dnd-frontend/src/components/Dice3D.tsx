@@ -1,12 +1,16 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
+import { Sparkles, Flame, Shield, Zap } from 'lucide-react';
+
+export type DiceMaterial = 'default' | 'crystal' | 'magma' | 'metal' | 'gold';
 
 interface Dice3DProps {
   value: number;
   isRolling: boolean;
   onAnimationEnd: () => void;
+  material?: DiceMaterial;
 }
 
-export default function Dice3D({ value, isRolling, onAnimationEnd }: Dice3DProps) {
+export default function Dice3D({ value, isRolling, onAnimationEnd, material = 'default' }: Dice3DProps) {
   const [rotation, setRotation] = useState({ x: 0, y: 0, z: 0 });
 
   useEffect(() => {
@@ -19,55 +23,94 @@ export default function Dice3D({ value, isRolling, onAnimationEnd }: Dice3DProps
       });
 
       const timer = setTimeout(() => {
-        // Parar na face correta (Aproximação de D20 em 3D simplificado com cubo para D6 ou pseudo-rotações fixas para D20)
-        // Para simplificar a física sem bibliotecas, vamos fazer o cubo girar muito e quando parar, mostramos um popup
         setRotation({ x: 0, y: 0, z: 0 }); 
-        setTimeout(onAnimationEnd, 500); 
-      }, 1500);
+        setTimeout(onAnimationEnd, 800); 
+      }, 2000);
 
       return () => clearTimeout(timer);
     }
   }, [isRolling, value, onAnimationEnd]);
 
-  // Se o dado parou e não está mais rolando, mostramos o resultado com estilo
   const isCritical = value === 20;
   const isFumble = value === 1;
 
+  const materialClass = useMemo(() => {
+    switch (material) {
+      case 'crystal': return 'dice-material-crystal';
+      case 'magma': return 'dice-material-magma';
+      case 'metal': return 'dice-material-metal';
+      case 'gold': return 'dice-material-metal-gold';
+      default: return 'bg-blue-600 border-4 border-blue-400';
+    }
+  }, [material]);
+
+  const faces = [
+    { label: '20', transform: 'translateZ(64px)', class: materialClass },
+    { label: '1', transform: 'rotateY(180deg) translateZ(64px)', class: materialClass },
+    { label: '14', transform: 'rotateY(90deg) translateZ(64px)', class: materialClass },
+    { label: '7', transform: 'rotateY(-90deg) translateZ(64px)', class: materialClass },
+    { label: '18', transform: 'rotateX(90deg) translateZ(64px)', class: materialClass },
+    { label: '3', transform: 'rotateX(-90deg) translateZ(64px)', class: materialClass },
+  ];
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm transition-opacity duration-300">
-      <div className="flex flex-col items-center">
-        {/* Container do "Dado 3D" simplificado (um cubo girando) */}
+    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-950/80 backdrop-blur-md transition-opacity duration-500 animate-in fade-in">
+      
+      {/* Background Glow for Criticals */}
+      {isCritical && !isRolling && (
+         <div className="absolute w-[50vw] h-[50vw] bg-amber-500/20 rounded-full blur-[120px] animate-pulse pointer-events-none" />
+      )}
+      
+      <div className="flex flex-col items-center relative z-10">
         {isRolling ? (
-          <div className="scene w-32 h-32 mb-8 perspective-1000">
+          <div className="scene w-32 h-32 mb-12 perspective-1000 scale-125 md:scale-150">
             <div 
-              className="cube w-full h-full relative preserve-3d transition-transform duration-[1500ms] ease-out"
+              className="cube w-full h-full relative preserve-3d transition-transform duration-[2000ms] ease-out"
               style={{ transform: `rotateX(${rotation.x}deg) rotateY(${rotation.y}deg) rotateZ(${rotation.z}deg)` }}
             >
-              <div className="face front absolute w-full h-full bg-blue-600 border-4 border-blue-400 rounded-xl flex items-center justify-center text-4xl font-bold text-white shadow-[0_0_20px_rgba(59,130,246,0.5)]" style={{ transform: 'translateZ(64px)' }}>20</div>
-              <div className="face back absolute w-full h-full bg-blue-800 border-4 border-blue-500 rounded-xl flex items-center justify-center text-4xl font-bold text-white opacity-80" style={{ transform: 'rotateY(180deg) translateZ(64px)' }}>1</div>
-              <div className="face right absolute w-full h-full bg-blue-700 border-4 border-blue-400 rounded-xl flex items-center justify-center text-4xl font-bold text-white opacity-90" style={{ transform: 'rotateY(90deg) translateZ(64px)' }}>14</div>
-              <div className="face left absolute w-full h-full bg-blue-900 border-4 border-blue-500 rounded-xl flex items-center justify-center text-4xl font-bold text-white opacity-90" style={{ transform: 'rotateY(-90deg) translateZ(64px)' }}>7</div>
-              <div className="face top absolute w-full h-full bg-blue-600 border-4 border-blue-400 rounded-xl flex items-center justify-center text-4xl font-bold text-white opacity-80" style={{ transform: 'rotateX(90deg) translateZ(64px)' }}>18</div>
-              <div className="face bottom absolute w-full h-full bg-blue-800 border-4 border-blue-500 rounded-xl flex items-center justify-center text-4xl font-bold text-white opacity-80" style={{ transform: 'rotateX(-90deg) translateZ(64px)' }}>3</div>
+              {faces.map((face, i) => (
+                <div 
+                  key={i}
+                  className={`face absolute w-full h-full rounded-[1.5rem] flex items-center justify-center text-4xl font-black shadow-2xl overflow-hidden shimmer ${face.class}`}
+                  style={{ transform: face.transform }}
+                >
+                  <span className="drop-shadow-[0_2px_10px_rgba(0,0,0,0.5)]">{face.label}</span>
+                </div>
+              ))}
             </div>
           </div>
         ) : (
-          <div className={`w-40 h-40 flex items-center justify-center rounded-3xl mb-8 animate-in zoom-in duration-300
-            ${isCritical ? 'bg-amber-500 shadow-[0_0_50px_rgba(245,158,11,0.8)] border-4 border-yellow-200' : 
-              isFumble ? 'bg-red-600 shadow-[0_0_50px_rgba(220,38,38,0.8)] border-4 border-red-300' : 
-              'bg-blue-600 shadow-[0_0_40px_rgba(37,99,235,0.6)] border-4 border-blue-300'}`}
+          <div className={`group relative w-48 h-48 flex items-center justify-center rounded-[3rem] mb-12 animate-in zoom-in-50 duration-500 shadow-2xl border-4 shimmer ${materialClass} ${
+            isCritical ? 'scale-110 shadow-amber-500/50' : 
+            isFumble ? 'grayscale bg-red-950 border-red-500 shadow-red-500/50' : ''}`}
           >
-            <span className="text-7xl font-black text-white drop-shadow-lg">{value}</span>
+            {isCritical && (
+              <div className="absolute -top-6 -right-6 bg-amber-500 p-4 rounded-2xl shadow-xl shadow-amber-500/40 rotate-12 animate-bounce">
+                <Sparkles className="w-6 h-6 text-white" />
+              </div>
+            )}
+            <span className="text-[120px] font-black drop-shadow-[0_5px_15px_rgba(0,0,0,0.8)] tracking-tighter">
+              {value}
+            </span>
+            
+            {/* Inner Sparkles for High Value */}
+            {value > 15 && (
+              <div className="absolute inset-0 opacity-40 pointer-events-none">
+                <div className="absolute top-4 left-4"><Sparkles className="w-4 h-4" /></div>
+                <div className="absolute bottom-4 right-4"><Sparkles className="w-4 h-4" /></div>
+              </div>
+            )}
           </div>
         )}
 
         {!isRolling && (
-          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <span className={`text-4xl font-black uppercase tracking-widest drop-shadow-xl
-              ${isCritical ? 'text-amber-400' : isFumble ? 'text-red-400' : 'text-blue-200'}`}
+          <div className="flex flex-col items-center gap-4 animate-in fade-in slide-in-from-bottom-8 duration-700">
+            <h2 className={`text-5xl font-black uppercase tracking-[0.2em] italic drop-shadow-2xl text-center
+              ${isCritical ? 'text-amber-400' : isFumble ? 'text-red-500' : 'text-indigo-200'}`}
             >
-              {isCritical ? 'Acerto Crítico!' : isFumble ? 'Falha Crítica!' : 'Rolagem Concluída'}
-            </span>
+              {isCritical ? 'DESTINO HEROICO!' : isFumble ? 'RUÍNA ABSOLUTA!' : 'RESULTADO'}
+            </h2>
+            <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.5em] mt-2">Toque em qualquer lugar para continuar</p>
           </div>
         )}
       </div>

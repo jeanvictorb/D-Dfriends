@@ -55,10 +55,10 @@ export default function CharacterSelection({ characters, onSelect, onCreateNew, 
           {characters.map((char, index) => {
             const icon = getClassIcon(char.class_subclass);
             return (
-              <button
+              <div
                 key={char.id}
                 onClick={() => onSelect(char)}
-                className="group relative flex flex-col bg-[#15234b]/40 backdrop-blur-xl border border-white/10 rounded-[2rem] p-8 text-left transition-all hover:-translate-y-2 hover:border-white/20 overflow-hidden animate-in fade-in slide-in-from-bottom-8 duration-700"
+                className="group relative flex flex-col bg-[#15234b]/40 backdrop-blur-xl border border-white/10 rounded-[2rem] p-8 text-left transition-all hover:-translate-y-2 hover:border-white/20 overflow-hidden animate-in fade-in slide-in-from-bottom-8 duration-700 cursor-pointer"
                 style={{ transitionDelay: `${index * 100}ms` }}
               >
                 {/* Class Themed Glow */}
@@ -119,7 +119,7 @@ export default function CharacterSelection({ characters, onSelect, onCreateNew, 
                     </span>
                   </div>
                 </div>
-              </button>
+              </div>
             );
           })}
 

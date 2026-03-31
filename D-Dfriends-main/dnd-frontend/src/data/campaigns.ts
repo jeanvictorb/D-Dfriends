@@ -22,6 +22,24 @@ export interface Campaign {
 
 export const CAMPAIGNS: Campaign[] = [
   {
+    id: 'tutorial_caminho_aventureiro',
+    title: 'Aprenda a Jogar: O Caminho do Aventureiro',
+    subtitle: 'Tutorial Guiado • Fantasia',
+    style: 'Tutorial',
+    icon: '🎓',
+    description:
+      'Uma aventura curta e segura para aprender os comandos básicos: falar com o Mestre, rolar dados e descobrir sua classe heróica.',
+    openingNarration:
+      'Tutorial — Parte I: A Academia de Heróis',
+    startMessage:
+      'BEM-VINDO À ACADEMIA DE HERÓIS! Sou seu Mestre IA. Vamos aprender como o destino é tecido. Você está em um pátio de treinamento ensolarado. O Instrutor Kaelen, um paladino veterano, sorri e diz: "Bem-vindo, recruta! Antes de escolhermos sua arma e seu caminho, diga-me: qual é o seu nome e o que te trouxe até aqui hoje?" (Dica: Digite livremente no chat para responder).',
+    scenes: [
+      { id: 'patio_treino', name: 'Pátio de Treino', description: 'Onde heróis começam sua jornada.', imageUrl: '/images/scenes/tutorial_treinamento.png', x: 20, y: 80 },
+      { id: 'campo_alvos', name: 'Campo de Alvos', description: 'Prática de combate e magia.', imageUrl: '/images/scenes/tutorial_alvos.png', x: 50, y: 50 },
+      { id: 'sala_testes', name: 'Câmara do Destino', description: 'O portal para o mundo real.', imageUrl: '/images/scenes/tumba.png', x: 80, y: 20 }
+    ]
+  },
+  {
     id: 'maldição_do_rei_morto',
     title: 'A Maldição do Rei Morto',
     subtitle: 'Épico • Horror Gótico',

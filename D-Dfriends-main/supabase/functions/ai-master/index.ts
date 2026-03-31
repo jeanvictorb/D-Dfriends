@@ -11,10 +11,10 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const { message, roomId, characterContext } = await req.json()
+    const { message, roomId, characterContext, isChronicle } = await req.json()
 
-    if (!message || !roomId || !characterContext) {
-      throw new Error('Campos obrigatórios ausentes (message, roomId, characterContext)')
+    if (!roomId || !characterContext || (!message && !isChronicle)) {
+      throw new Error('Campos obrigatórios ausentes (message/isChronicle, roomId, characterContext)')
     }
 
     const supabaseClient = createClient(
@@ -44,7 +44,7 @@ Deno.serve(async (req: Request) => {
       .join('\n') || ''
 
     // 3. Prompt Construction
-    const isCampaignStart = message.startsWith('INÍCIO DE CAMPANHA:')
+    const isCampaignStart = message?.startsWith('INÍCIO DE CAMPANHA:') || false
     const style = room.style || 'Épico/Fantasia'
     
     let fullPrompt: string
@@ -65,22 +65,35 @@ PERSONAGEM: ${characterContext.name} (${characterContext.class_subclass}, Nível
 TEMA DA CAMPANHA: ${message.replace('INÍCIO DE CAMPANHA:', '').trim()}
 
 NARRAÇÃO INICIAL:`
+    } else if (isChronicle) {
+      fullPrompt = `Você é um bardo real e historiador épico de uma terra de fantasia.
+Sua tarefa é ler o histórico de mensagens abaixo e transformá-lo em uma CRÔNICA ÉPICA, heróica e envolvente.
+REGRAS:
+- Responda SEMPRE em Português do Brasil.
+- Use um tom de lenda, citando feitos heróicos, perigos enfrentados e decisões cruciais.
+- Mencione os personagens pelo nome (ex: ${characterContext.name}).
+- Seja extenso e descritivo; não economize nas palavras (800-1500 tokens ou mais).
+- Use uma linguagem arcaica ou formal, típica de grandes épicos.
+- Estruture o texto em parágrafos que contem uma história contínua.
+HISTÓRICO DA SESSÃO:
+${history}
+A CRÔNICA DAS ERAS:`
     } else {
       fullPrompt = `Você é um Mestre de RPG (Dungeon Master) narrando uma aventura no estilo "${style}".
-
+ 
 REGRAS:
 - Interprete o resultado (1 = Falha Crítica, 20 = Sucesso Crítico).
 - Responda em Português do Brasil, seja extremamente imersivo, detalhista, épico e EXTENSO.
 - NÃO se limite a poucos parágrafos; descreva as consequências da ação com profundidade literária total.
 - Sinta-se livre para desenvolver a cena sem medo de ser longo.
 - Mantenha a coerência com o histórico abaixo.
-
+ 
 HISTÓRICO:
 ${history}
-
+ 
 PERSONAGEM: ${characterContext.name} (${characterContext.class_subclass})
 AÇÃO ATUAL: ${message}
-
+ 
 NARRE O RESULTADO:`
     }
 
@@ -111,7 +124,7 @@ NARRE O RESULTADO:`
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             contents: [{ parts: [{ text: fullPrompt }] }],
-            generationConfig: { temperature: 0.9, maxOutputTokens: 2048 }
+            generationConfig: { temperature: 0.9, maxOutputTokens: 15000 }
           })
         })
 
@@ -152,9 +165,9 @@ NARRE O RESULTADO:`
     // 5. Save AI response to DB
     await supabaseClient.from('room_messages').insert({
       room_id: roomId,
-      player_name: 'Narrador IA',
+      player_name: isChronicle ? 'O Cronista Real' : 'Narrador IA',
       content: finalNarration,
-      type: 'narration'
+      type: isChronicle ? 'chronicle' : 'narration'
     })
 
     return new Response(JSON.stringify({ text: finalNarration }), {

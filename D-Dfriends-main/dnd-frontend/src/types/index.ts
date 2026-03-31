@@ -13,7 +13,7 @@ export interface RoomMessage {
   room_id: string;
   player_name: string;
   content: string;
-  type: 'action' | 'narration' | 'dice';
+  type: 'action' | 'narration' | 'dice' | 'chronicle';
   created_at: string;
 }
 

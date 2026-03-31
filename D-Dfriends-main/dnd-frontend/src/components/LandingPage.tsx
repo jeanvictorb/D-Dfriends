@@ -79,22 +79,19 @@ const LandingPage: React.FC<LandingPageProps> = ({ onStart, onLogin }) => {
 
           {/* Hero Interface Preview - Glassmorphism Card */}
           <div className="mt-20 relative animate-fade-in" style={{ animationDelay: '0.4s' }}>
-            <div className="absolute -inset-1 bg-gradient-to-b from-blue-600/20 to-transparent rounded-[2rem] blur-2xl -z-10"></div>
-            <div className="bg-[#15234b]/40 backdrop-blur-xl border border-white/10 rounded-[2rem] p-4 shadow-2xl overflow-hidden aspect-video relative group">
-              <div className="absolute inset-0 bg-gradient-to-t from-[#0c1527] to-transparent opacity-60"></div>
+            <div className="absolute -inset-4 bg-blue-600/10 rounded-[3rem] blur-3xl -z-10 animate-pulse"></div>
+            <div className="bg-[#15234b]/40 backdrop-blur-xl border border-white/10 rounded-[2.5rem] p-4 shadow-2xl overflow-hidden aspect-video relative group transition-all hover:scale-[1.02] hover:border-blue-500/30">
+              <div className="absolute inset-0 bg-gradient-to-t from-[#0c1527] via-transparent to-transparent opacity-40 z-10"></div>
+              
               <img 
-                src="https://images.unsplash.com/photo-1614850523296-d8c1af93d400?q=80&w=2070&auto=format&fit=crop" 
-                alt="RPG Adventure" 
-                className="w-full h-full object-cover rounded-3xl opacity-50 transition-transform duration-700 group-hover:scale-105"
+                src="/images/cinematic_trailer.png" 
+                alt="RPG Friends Cinematic Experience" 
+                className="w-full h-full object-cover rounded-[2rem] opacity-90 transition-transform duration-1000 group-hover:scale-105"
               />
-              <div className="absolute inset-0 flex items-center justify-center">
-                <div className="text-center p-8">
-                  <div className="w-20 h-20 bg-blue-600/80 backdrop-blur-md rounded-full flex items-center justify-center mx-auto mb-6 shadow-2xl shadow-blue-500/40 cursor-pointer hover:scale-110 transition-transform">
-                    <Play className="w-10 h-10 text-white fill-current ml-1" />
-                  </div>
-                  <h3 className="text-2xl font-black text-white italic tracking-widest uppercase">Assista ao Trailer</h3>
-                </div>
-              </div>
+
+              {/* Decorative Corner Elements */}
+              <div className="absolute top-8 left-8 w-12 h-12 border-t-2 border-l-2 border-white/20 rounded-tl-2xl"></div>
+              <div className="absolute bottom-8 right-8 w-12 h-12 border-b-2 border-r-2 border-white/20 rounded-br-2xl"></div>
             </div>
           </div>
         </div>
