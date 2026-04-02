@@ -2,14 +2,15 @@ import React, { useState, useEffect } from 'react';
 import { SRD_DATA } from '../lib/srdData';
 import { CLASS_ICONS } from '../lib/classIcons';
 import { Character } from '../types';
-import { User, Shield, Zap, Heart, Scroll, Dice5, ChevronRight, Check, Sparkles, Sword, Info, Star } from 'lucide-react';
+import { User, Shield, Zap, Heart, Scroll, Dice5, ChevronRight, Check, Sparkles, Sword, Info, Star, BookOpen } from 'lucide-react';
 
 interface CharacterCreatorProps {
   onCreate: (char: Partial<Character>) => void;
   initialClass?: string | null;
+  onOpenCompendium?: () => void;
 }
 
-const CharacterCreator: React.FC<CharacterCreatorProps> = ({ onCreate, initialClass }) => {
+const CharacterCreator: React.FC<CharacterCreatorProps> = ({ onCreate, initialClass, onOpenCompendium }) => {
   const [step, setStep] = useState(1);
   const [formData, setFormData] = useState({
     name: '',
@@ -132,9 +133,20 @@ const CharacterCreator: React.FC<CharacterCreatorProps> = ({ onCreate, initialCl
                   <h3 className="text-[10px] font-black text-blue-400 uppercase tracking-[0.3em] flex items-center gap-2">
                      <Sword className="w-4 h-4" /> Escolha sua Vocação
                   </h3>
-                  {initialClass && (
-                    <span className="px-3 py-1 bg-amber-500/10 border border-amber-500/30 text-[9px] font-black text-amber-500 rounded-lg uppercase tracking-widest">Pre-selecionado pelo Tutorial</span>
-                  )}
+                  <div className="flex items-center gap-4">
+                    {onOpenCompendium && (
+                      <button 
+                        onClick={onOpenCompendium}
+                        className="flex items-center gap-2 px-4 py-2 bg-amber-500/10 border border-amber-500/20 text-amber-500 rounded-xl hover:bg-amber-500/20 transition-all group/info"
+                      >
+                        <BookOpen className="w-4 h-4" />
+                        <span className="text-[9px] font-black uppercase tracking-widest">Guia de Classes</span>
+                      </button>
+                    )}
+                    {initialClass && (
+                      <span className="px-3 py-1 bg-blue-500/10 border border-blue-500/30 text-[9px] font-black text-blue-400 rounded-lg uppercase tracking-widest">Pre-selecionado</span>
+                    )}
+                  </div>
                </div>
                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   {SRD_DATA.dnd_classes.map((c, i) => {

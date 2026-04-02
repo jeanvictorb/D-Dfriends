@@ -54,12 +54,13 @@ A aventura está começando agora! Gere uma abertura épica e imersiva.
 
 REGRAS:
 - Responda SEMPRE em Português do Brasil.
-- NÃO há limite de caracteres ou palavras. Sinta-se à vontade para escrever 500, 1000 ou mais palavras se a cena for rica.
+- Seja DIRETO: Comece a narração imediatamente, sem frases introdutórias (ex: NÃO diga "Certamente!", "Aqui está sua aventura").
+- Extensão: Sinta-se à vontade para escrever 800, 1500 ou mais palavras. Explore cada detalhe.
 - Use descrições sensoriais profundas (cheiros, sons, clima, sensações táteis).
-- Descreva o cenário e a atmosfera com riqueza literária.
-- Apresente um NPC ou um evento imediato de forma dramática.
-- Gere múltiplos parágrafos bem desenvolvidos.
-- Termine perguntando: "O que você faz?" ou algo similar.
+- Descreva o cenário e a atmosfera com grande riqueza literária.
+- Apresente NPCs ou eventos imediatos de forma dramática.
+- Gere múltiplos parágrafos longos e bem desenvolvidos.
+- Termine instigando a ação (ex: "O que você faz?").
 
 PERSONAGEM: ${characterContext.name} (${characterContext.class_subclass}, Nível ${characterContext.level})
 TEMA DA CAMPANHA: ${message.replace('INÍCIO DE CAMPANHA:', '').trim()}
@@ -82,10 +83,12 @@ A CRÔNICA DAS ERAS:`
       fullPrompt = `Você é um Mestre de RPG (Dungeon Master) narrando uma aventura no estilo "${style}".
  
 REGRAS:
+- Responda SEMPRE em Português do Brasil.
+- Seja DIRETO: Comece narrando o resultado da ação imediatamente.
+- NÃO use frases de confirmação como "Entendido", "Ação recebida", etc. Vá direto para a história.
 - Interprete o resultado (1 = Falha Crítica, 20 = Sucesso Crítico).
-- Responda em Português do Brasil, seja extremamente imersivo, detalhista, épico e EXTENSO.
-- NÃO se limite a poucos parágrafos; descreva as consequências da ação com profundidade literária total.
-- Sinta-se livre para desenvolver a cena sem medo de ser longo.
+- Seja extremamente imersivo, detalhista, épico e EXTENSO.
+- NÃO se limite; descreva as consequências da ação com profundidade literária total.
 - Mantenha a coerência com o histórico abaixo.
  
 HISTÓRICO:
@@ -105,11 +108,10 @@ NARRE O RESULTADO:`
     console.log(`[ai-master] Key Prefix: ${GEMINI_API_KEY.substring(0, 4)}... | Length: ${GEMINI_API_KEY.length}`)
 
     const MODELS = [
+      { name: 'gemini-1.5-pro-latest', version: 'v1beta' },
+      { name: 'gemini-2.0-flash-exp', version: 'v1beta' },
       { name: 'gemini-1.5-flash-latest', version: 'v1beta' },
       { name: 'gemini-2.0-flash', version: 'v1beta' },
-      { name: 'gemini-2.5-flash', version: 'v1beta' },
-      { name: 'gemini-1.5-flash-lite', version: 'v1beta' },
-      { name: 'gemini-2.0-flash-lite', version: 'v1beta' },
     ]
 
     let finalNarration = ''
@@ -124,7 +126,7 @@ NARRE O RESULTADO:`
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             contents: [{ parts: [{ text: fullPrompt }] }],
-            generationConfig: { temperature: 0.9, maxOutputTokens: 15000 }
+            generationConfig: { temperature: 0.8, maxOutputTokens: 30000 }
           })
         })
 
