@@ -1,6 +1,6 @@
 [build]
-  base = "dnd-frontend"
-  command = "npm install && npm run build"
+  base = "D-Dfriends-main/dnd-frontend"
+  command = "npm run build"
   publish = "dist"
 
 [build.environment]
