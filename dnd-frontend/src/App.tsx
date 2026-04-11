@@ -235,6 +235,12 @@ const App: React.FC = () => {
            return;
         }
 
+        if (data?.error) {
+          alert(`Erro do Mestre: ${data.error}`);
+          setIsAiThinking(false);
+          return;
+        }
+
         if (data?.text) {
         // Optimistic update to show full text immediately
         const aiMessage: RoomMessage = {
@@ -252,6 +258,8 @@ const App: React.FC = () => {
       }
     } catch (err) {
       console.error('[AI-MASTER Fatal]', err);
+      alert(`Erro fatal na conexão com a IA: ${err instanceof Error ? err.message : String(err)}`);
+      setIsAiThinking(false);
     }
   }
     setIsAiThinking(false);
